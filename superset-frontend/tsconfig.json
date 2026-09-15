@@ -85,6 +85,7 @@
     { "path": "./plugins/plugin-chart-horizon" },
     { "path": "./plugins/plugin-chart-paired-t-test" },
     { "path": "./plugins/plugin-chart-parallel-coordinates" },
+    { "path": "./plugins/plugin-chart-pareto" },
     { "path": "./plugins/plugin-chart-partition" },
     { "path": "./plugins/plugin-chart-world-map" },
     { "path": "./plugins/plugin-chart-ag-grid-table" },

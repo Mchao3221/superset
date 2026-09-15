@@ -47,6 +47,7 @@ export enum VizType {
   PairedTTest = 'paired_ttest',
   ParallelCoordinates = 'para',
   Partition = 'partition',
+  Pareto = 'pareto',
   Pie = 'pie',
   PivotTable = 'pivot_table_v2',
   Radar = 'radar',

@@ -139,6 +139,7 @@
     "@superset-ui/plugin-chart-horizon": "file:./plugins/plugin-chart-horizon",
     "@superset-ui/plugin-chart-paired-t-test": "file:./plugins/plugin-chart-paired-t-test",
     "@superset-ui/plugin-chart-parallel-coordinates": "file:./plugins/plugin-chart-parallel-coordinates",
+    "@superset-ui/plugin-chart-pareto": "file:./plugins/plugin-chart-pareto",
     "@superset-ui/plugin-chart-partition": "file:./plugins/plugin-chart-partition",
     "@superset-ui/plugin-chart-pivot-table": "file:./plugins/plugin-chart-pivot-table",
     "@superset-ui/plugin-chart-point-cluster-map": "file:./plugins/plugin-chart-point-cluster-map",
