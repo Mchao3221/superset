@@ -1,0 +1,40 @@
+{
+  "name": "@superset-ui/plugin-chart-pareto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "这是柏拉图",
+  "license": "Apache-2.0",
+  "author": "My Name",
+  "files": [
+    "esm",
+    "lib"
+  ],
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "module": "esm/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "npm run build-cjs && npm run build-esm && npm run ts-types",
+    "build-cjs": "babel --config-file=../../babel.config.js src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir lib",
+    "build-clean": "npm run clean && npm run build",
+    "build-esm": "babel --config-file=../../babel.config.js src --extensions \".ts,.tsx,.js,.jsx\" --copy-files --out-dir esm",
+    "dev": "babel --config-file=../../babel.config.js src --extensions \".ts,.tsx,.js,.jsx\" --watch --copy-files --out-dir esm",
+    "prebuild": "rimraf {lib,esm,tsconfig.tsbuildinfo}",
+    "postbuild": "npm run test",
+    "ts-types": "tsc --build",
+    "test": "jest --config ../../jest.config.js --testPathPatterns plugins/plugin-chart-pareto"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.16.0",
+    "rimraf": "^3.0.2"
+  },
+  "peerDependencies": {
+    "@apache-superset/core": "*",
+    "@superset-ui/chart-controls": "*",
+    "@superset-ui/core": "*",
+    "echarts": "*",
+    "react": "^18.3.0"
+  }
+}
