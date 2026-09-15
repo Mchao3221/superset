@@ -30,6 +30,10 @@ import buildParetoData from '../utils/paretoData';
 /** Threshold that a healthy Pareto distribution crosses for most categories. */
 const EIGHTY_PERCENT = 80;
 
+const FIRST_BAR_COLOR = '#df4343';
+const KEY_BARS_COLOR = '#e08a16';
+const OTHER_BARS_COLOR = '#2e7dd1';
+
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
 /**
@@ -122,8 +126,17 @@ export default function transformProps(
 
   // Distinct keys give the bars and the line two different palette entries.
   const colorScale = CategoricalColorNamespace.getScale(colorScheme);
-  const barColor = colorScale.getColor(metricLabel, sliceId);
   const lineColor = colorScale.getColor(cumulativeName, sliceId);
+
+  const barData = values.map((value, index) => {
+    let color = OTHER_BARS_COLOR;
+    if (index === 0) {
+      color = FIRST_BAR_COLOR;
+    } else if (cumulativePct[index] <= EIGHTY_PERCENT) {
+      color = KEY_BARS_COLOR;
+    }
+    return { value, itemStyle: { color } };
+  });
 
   const echartOptions: EChartsCoreOption = {
     // Re-lays out on container resize; Echart also calls resize() explicitly.
@@ -195,9 +208,10 @@ export default function transformProps(
         name: metricLabel,
         type: 'bar',
         yAxisIndex: 0,
-        data: values,
+        // 每根柱子自带颜色（80/20 三档规则），series 层不再另设 itemStyle.color。
+        data: barData,
         barMaxWidth: 56,
-        itemStyle: { color: barColor, borderRadius: [3, 3, 0, 0] },
+        itemStyle: { borderRadius: [3, 3, 0, 0] },
         tooltip: { valueFormatter: (value: number) => numberFormatter(value) },
       },
       ...(showCumulativeLine
