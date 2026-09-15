@@ -2,6 +2,15 @@
 
 Apache Superset is a data visualization platform with Flask/Python backend and React/TypeScript frontend.
 
+## 语言设置
+
+**重要**：请始终使用**简体中文**进行所有对话、解释和建议。
+
+- 代码注释必须用中文
+- 分析结果用中文输出
+- 提出的问题用中文表述
+- 只有代码本身保持英文
+
 ## Run Pre-commit Before Pushing
 
 Always run pre-commit against the files changed by the current branch before

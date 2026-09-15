@@ -858,6 +858,12 @@ msgstr "7天"
 msgid "7D"
 msgstr "7D"
 
+msgid "80% Reference Line"
+msgstr "80% 参考线"
+
+msgid "80/20 Dividing Line"
+msgstr "80/20 分界线"
+
 msgid "9/91 percentiles"
 msgstr "9/91百分位"
 
@@ -4474,6 +4480,12 @@ msgstr "交叉筛选"
 msgid "Cumulative"
 msgstr "累计"
 
+msgid "Cumulative %"
+msgstr "累计百分比"
+
+msgid "Cumulative Line"
+msgstr "累计线"
+
 msgid "Currency"
 msgstr "货币"
 
@@ -5876,6 +5888,14 @@ msgstr "拖拽以重新排序"
 
 msgid "Draw a marker on data points. Only applicable for line types."
 msgstr "在数据点上绘制标记。仅适用于线型。"
+
+msgid ""
+"Draw a vertical divider where the cumulative percentage first reaches 80%, "
+"separating the vital few categories from the rest. Requires the cumulative "
+"line."
+msgstr ""
+"在累计占比首次达到 80% 处画一条竖直分隔线，把关键少数类别与其余类别分开。"
+"需要先勾选累计线。"
 
 msgid "Draw area under curves. Only applicable for line types."
 msgstr "在曲线下绘制区域。仅适用于线型。"
@@ -19097,6 +19117,9 @@ msgstr "抓取中"
 msgid "ffill"
 msgstr "ffill"
 
+msgid "fishbone"
+msgstr "鱼骨图"
+
 #, fuzzy
 msgid "flat"
 msgstr "扁平"
@@ -19410,6 +19433,9 @@ msgstr "p95"
 #. do-not-translate
 msgid "p99"
 msgstr "p99"
+
+msgid "pareto"
+msgstr "柏拉图"
 
 #, fuzzy
 msgid "pending"
@@ -19730,3 +19756,31 @@ msgstr "© 图层归属"
 #, fuzzy
 msgid "№"
 msgstr "№"
+
+#: plugins/plugin-chart-progress-bar-rank (custom chart)
+msgid "Gradient End Color"
+msgstr "渐变结束色"
+
+msgid "Gradient Start Color"
+msgstr "渐变起始色"
+
+msgid "Left-hand colour of the progress-bar gradient."
+msgstr "进度条渐变左端的颜色。"
+
+msgid "Prefix category labels with their rank, e.g. \"1. Fall\"."
+msgstr "在类目标签前加上排名编号，例如「1. 跌倒」。"
+
+msgid "Progress Bar Rank"
+msgstr "进度条排名表"
+
+msgid "Rank Prefix"
+msgstr "排名前缀"
+
+msgid "Right-hand colour of the progress-bar gradient."
+msgstr "进度条渐变右端的颜色。"
+
+msgid "Show rows whose cumulative percentage stays at or below this value. The top-ranked row is always shown."
+msgstr "只显示累计占比不超过该值的行；排名第一的行始终显示。"
+
+msgid "Vital Few Threshold (%)"
+msgstr "关键少数阈值（%）"
