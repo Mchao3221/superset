@@ -29,6 +29,7 @@ import HorizonChartPlugin from '@superset-ui/plugin-chart-horizon';
 import PairedTTestChartPlugin from '@superset-ui/plugin-chart-paired-t-test';
 import ParallelCoordinatesChartPlugin from '@superset-ui/plugin-chart-parallel-coordinates';
 import { Pareto } from '@superset-ui/plugin-chart-pareto';
+import { PluginChartFishbone } from '@superset-ui/plugin-chart-fishbone';
 import PartitionChartPlugin from '@superset-ui/plugin-chart-partition';
 import TableChartPlugin from '@superset-ui/plugin-chart-table';
 import { WordCloudChartPlugin } from '@superset-ui/plugin-chart-word-cloud';
@@ -135,6 +136,7 @@ export default class MainPreset extends Preset {
         new PartitionChartPlugin().configure({ key: VizType.Partition }),
         new EchartsPieChartPlugin().configure({ key: VizType.Pie }),
         new Pareto().configure({ key: VizType.Pareto }),
+        new PluginChartFishbone().configure({ key: VizType.Fishbone }),
         new PivotTableChartPluginV2().configure({ key: VizType.PivotTable }),
         new EchartsRoseChartPlugin().configure({ key: VizType.Rose }),
         new TableChartPlugin().configure({ key: VizType.Table }),
