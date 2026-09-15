@@ -142,6 +142,7 @@
     "@superset-ui/plugin-chart-parallel-coordinates": "file:./plugins/plugin-chart-parallel-coordinates",
     "@superset-ui/plugin-chart-pareto": "file:./plugins/plugin-chart-pareto",
     "@superset-ui/plugin-chart-partition": "file:./plugins/plugin-chart-partition",
+    "@superset-ui/plugin-chart-progress-bar-rank": "file:./plugins/plugin-chart-progress-bar-rank",
     "@superset-ui/plugin-chart-pivot-table": "file:./plugins/plugin-chart-pivot-table",
     "@superset-ui/plugin-chart-point-cluster-map": "file:./plugins/plugin-chart-point-cluster-map",
     "@superset-ui/plugin-chart-table": "file:./plugins/plugin-chart-table",

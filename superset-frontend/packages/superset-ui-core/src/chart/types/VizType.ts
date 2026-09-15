@@ -51,6 +51,7 @@ export enum VizType {
   Pareto = 'pareto',
   Pie = 'pie',
   PivotTable = 'pivot_table_v2',
+  ProgressBarRank = 'progress_bar_rank',
   Radar = 'radar',
   Rose = 'rose',
   Sankey = 'sankey_v2',
