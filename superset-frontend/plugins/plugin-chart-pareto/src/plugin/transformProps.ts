@@ -17,7 +17,6 @@
  * under the License.
  */
 import {
-  CategoricalColorNamespace,
   ChartProps,
   getMetricLabel,
   getNumberFormatter,
@@ -30,9 +29,42 @@ import buildParetoData from '../utils/paretoData';
 /** Threshold that a healthy Pareto distribution crosses for most categories. */
 const EIGHTY_PERCENT = 80;
 
+// 三档柱子配色：第一根柱子单独高亮，累计占比 ≤ 80% 的「关键少数」用橙色，
+// 其余「次要多数」用蓝色。固定色值而不是走分类调色板，保证 80/20 的语义
+// 在任何数据集下都能一眼认出来（与 EIGHTY_LINE_COLOR 同理）。
 const FIRST_BAR_COLOR = '#df4343';
 const KEY_BARS_COLOR = '#e08a16';
 const OTHER_BARS_COLOR = '#2e7dd1';
+
+/**
+ * 累计曲线的颜色。
+ *
+ * 同样取固定色值而不是走分类调色板：这条线是叠加在柱子之上的第二套读数，
+ * 走调色板会被分配成某根柱子的同色，两条线就分不开了。
+ *
+ * 注意它与 KEY_BARS_COLOR 是同一个值：曲线和「关键少数」那批柱子同色，
+ * 靠线宽与空心拐点标记区分两者。
+ */
+const CUMULATIVE_LINE_COLOR = '#e08a16';
+/** 累计曲线的线宽。 */
+const CUMULATIVE_LINE_WIDTH = 4;
+/** 累计曲线拐点标记的直径。空心圈比实心点显瘦，跟着线宽一起放大。 */
+const CUMULATIVE_SYMBOL_SIZE = 9;
+
+/**
+ * 柱子的最大宽度：原先 56px，再放宽 15%。
+ *
+ * 类目多到把绘图区挤满时，柱宽由类目宽度决定，这个值不起作用；类目少时
+ * 它才是实际柱宽。
+ */
+const BAR_MAX_WIDTH = 64;
+
+/**
+ * 坐标轴刻度与轴名的字号。
+ *
+ * ECharts 默认 12px，在仪表盘里偏小；横纵坐标统一抬到 16px，两侧保持一致。
+ */
+const AXIS_LABEL_FONT_SIZE = 16;
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
@@ -92,9 +124,7 @@ export default function transformProps(
     showCumulativeLine = true,
     showEightyLine = true,
     showEightyTwentyLine = true,
-    colorScheme,
     yAxisFormat,
-    sliceId,
   } = formData as ParetoChartFormData;
 
   const metricLabel = getMetricLabel(metric);
@@ -124,10 +154,8 @@ export default function transformProps(
   const numberFormatter = getNumberFormatter(yAxisFormat);
   const cumulativeName = t('Cumulative %');
 
-  // Distinct keys give the bars and the line two different palette entries.
-  const colorScale = CategoricalColorNamespace.getScale(colorScheme);
-  const lineColor = colorScale.getColor(cumulativeName, sliceId);
-
+  // 每根柱子按 80/20 规则取固定色：第一根永远高亮，累计占比 ≤ 80% 的
+  // 归属「关键少数」，其余是「次要多数」。
   const barData = values.map((value, index) => {
     let color = OTHER_BARS_COLOR;
     if (index === 0) {
@@ -164,6 +192,7 @@ export default function transformProps(
           interval: 0,
           hideOverlap: true,
           rotate: categories.length > 8 ? 45 : 0,
+          fontSize: AXIS_LABEL_FONT_SIZE,
         },
       },
       // 只为 80/20 分界线服务的隐藏数值轴。
@@ -184,8 +213,11 @@ export default function transformProps(
       {
         type: 'value',
         name: metricLabel,
-        nameTextStyle: { align: 'left' },
-        axisLabel: { formatter: (value: number) => numberFormatter(value) },
+        nameTextStyle: { align: 'left', fontSize: AXIS_LABEL_FONT_SIZE },
+        axisLabel: {
+          formatter: (value: number) => numberFormatter(value),
+          fontSize: AXIS_LABEL_FONT_SIZE,
+        },
         splitLine: { lineStyle: { type: 'dashed' } },
       },
       ...(showCumulativeLine
@@ -193,12 +225,15 @@ export default function transformProps(
             {
               type: 'value' as const,
               name: cumulativeName,
-              nameTextStyle: { align: 'right' },
+              nameTextStyle: { align: 'right', fontSize: AXIS_LABEL_FONT_SIZE },
               min: 0,
               max: 100,
               // A right-hand percentage axis needs no gridlines of its own.
               splitLine: { show: false },
-              axisLabel: { formatter: (value: number) => `${value}%` },
+              axisLabel: {
+                formatter: (value: number) => `${value}%`,
+                fontSize: AXIS_LABEL_FONT_SIZE,
+              },
             },
           ]
         : []),
@@ -210,7 +245,7 @@ export default function transformProps(
         yAxisIndex: 0,
         // 每根柱子自带颜色（80/20 三档规则），series 层不再另设 itemStyle.color。
         data: barData,
-        barMaxWidth: 56,
+        barMaxWidth: BAR_MAX_WIDTH,
         itemStyle: { borderRadius: [3, 3, 0, 0] },
         tooltip: { valueFormatter: (value: number) => numberFormatter(value) },
       },
@@ -221,16 +256,14 @@ export default function transformProps(
               type: 'line' as const,
               yAxisIndex: 1,
               data: cumulativePct,
-              symbol: 'circle',
-              symbolSize: 7,
+              // 空心圈：ECharts 的 empty* 记号只描边不填充，描边色取自
+              // itemStyle.color，图例里也会跟着显示成同一条线的颜色。
+              symbol: 'emptyCircle',
+              symbolSize: CUMULATIVE_SYMBOL_SIZE,
               // Above the bars so the vertex markers are never clipped.
               z: 3,
-              lineStyle: { width: 2.5, color: lineColor },
-              itemStyle: {
-                color: lineColor,
-                borderColor: '#fff',
-                borderWidth: 1.5,
-              },
+              lineStyle: { width: CUMULATIVE_LINE_WIDTH, color: CUMULATIVE_LINE_COLOR },
+              itemStyle: { color: CUMULATIVE_LINE_COLOR },
               tooltip: { valueFormatter: (value: number) => formatPercent(value) },
               ...(showEightyLine
                 ? {

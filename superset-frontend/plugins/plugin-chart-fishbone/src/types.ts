@@ -29,15 +29,15 @@ export type BoneThicknessKey = 'thin' | 'medium' | 'thick';
 
 /** 每一档对应的像素值，控件与布局共用同一份定义。 */
 export const FONT_SIZE_PX: Record<FontSizeKey, number> = {
-  s: 12,
-  m: 14,
-  l: 16,
+  s: 16,
+  m: 18,
+  l: 20,
 };
 
 export const BONE_THICKNESS_PX: Record<BoneThicknessKey, number> = {
-  thin: 1.5,
-  medium: 2.5,
-  thick: 3.5,
+  thin: 3,
+  medium: 5,
+  thick: 7,
 };
 
 /**
@@ -80,8 +80,6 @@ export interface FishboneChartFormData {
   boneThickness?: BoneThicknessKey;
   colorScheme?: string;
   yAxisFormat?: string;
-  /** 图表 id，用来让同一份配色在不同图表间保持稳定。 */
-  sliceId?: number;
 }
 
 /** 鱼骨上的一个原因节点，由数据行聚合而来。 */
@@ -99,7 +97,7 @@ export interface FishboneRow {
   /** 1 = 中骨（第二层维度），2 = 小骨（第三层及更深）。 */
   depth: number;
   value: number;
-  /** 从大骨标签到本行的完整路径，用于 tooltip 与悬停高亮。 */
+  /** 从大骨标签到本行的完整路径，用于 tooltip。 */
   path: string[];
 }
 
@@ -128,13 +126,20 @@ export interface LaidOutText {
   fontSize: number;
   /** SVG 的 text-anchor，已按鱼头方向做过镜像调整。 */
   anchor: 'start' | 'middle' | 'end';
-  /** 该文字所属大骨的 key，用于悬停高亮联动。 */
-  boneKey?: string;
+}
+
+/** 带圆角的矩形，左上角坐标，用于鱼头外框。 */
+export interface LaidOutBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
 }
 
 export interface LaidOutRow {
   key: string;
-  /** 完整标签（不截断），用于 tooltip 与悬停高亮。 */
+  /** 完整标签（不截断），用于 tooltip。 */
   label: string;
   depth: number;
   value: number;
@@ -167,6 +172,8 @@ export interface FishboneLayout {
   /** 主干末端的箭头。 */
   arrow: string;
   headText: LaidOutText | null;
+  /** 圈住鱼头文字的圆角矩形；没有鱼头文字时为 null。 */
+  headBox: LaidOutBox | null;
   bones: LaidOutBone[];
   /** 空间不足时被丢弃的原因行数，0 表示完整展示。 */
   droppedRows: number;
@@ -179,6 +186,8 @@ export interface FishboneProps {
   layout: FishboneLayout;
   /** 主干配色。 */
   spineColor: string;
+  /** 鱼头文字的配色，同时也是外框的描边色。 */
+  headColor: string;
   /** 行标签与数值的文字配色。 */
   labelColor: string;
   /** 数值文字配色，比标签弱一档。 */

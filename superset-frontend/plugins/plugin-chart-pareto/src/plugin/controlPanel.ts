@@ -65,7 +65,8 @@ const config: ControlPanelConfig = {
       label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
-        ['color_scheme'],
+        // 没有 color_scheme：柱子的三档颜色与累计曲线都是固定语义色
+        // （见 transformProps 里的 80/20 配色），换配色表不会改变任何东西。
         ['y_axis_format'],
         [
           {

@@ -19,10 +19,10 @@
 import { MouseEvent, useCallback, useRef, useState } from 'react';
 import { FishboneProps, LaidOutRow } from './types';
 
-/** 悬停时非高亮分支保留的不透明度。 */
-const DIMMED_OPACITY = 0.28;
 /** 引线加粗后的命中宽度：引线本身只有 1px，直接悬停很难点中。 */
 const HIT_STROKE_WIDTH = 10;
+/** 鱼头外框的描边宽度。 */
+const HEAD_BOX_STROKE_WIDTH = 2;
 /** tooltip 与鼠标之间的间隙。 */
 const TOOLTIP_OFFSET = 14;
 /** tooltip 距离容器边缘的最小留白。 */
@@ -31,7 +31,6 @@ const TOOLTIP_MARGIN = 8;
 const TOOLTIP_ESTIMATED_WIDTH = 240;
 
 interface HoverState {
-  boneKey: string;
   /** 第一行：这条原因的完整路径，或大骨自身的名字。 */
   title: string;
   /** 第二行：数值，没有度量时为 null。 */
@@ -45,13 +44,14 @@ interface HoverState {
  *
  * 用纯 SVG 而不是 ECharts：鱼骨没有对应的原生图形，用 graphic 元素硬拼反而
  * 更啰嗦，而 SVG 的坐标就是布局算出来的坐标，一一对应，导出图片也更稳。
- * 悬停高亮通过切换分支透明度实现，不需要额外画一层。
+ * 悬停只弹 tooltip 看完整路径与数值，不改变任何图元的样式。
  */
 export default function Fishbone({
   width,
   height,
   layout,
   spineColor,
+  headColor,
   labelColor,
   valueColor,
   noDataText,
@@ -61,12 +61,7 @@ export default function Fishbone({
   const [hover, setHover] = useState<HoverState | null>(null);
 
   const moveTooltip = useCallback(
-    (
-      event: MouseEvent,
-      boneKey: string,
-      title: string,
-      detail: string | null,
-    ) => {
+    (event: MouseEvent, title: string, detail: string | null) => {
       const rect = containerRef.current?.getBoundingClientRect();
       const rawX = event.clientX - (rect?.left ?? 0) + TOOLTIP_OFFSET;
       const rawY = event.clientY - (rect?.top ?? 0) + TOOLTIP_OFFSET;
@@ -75,7 +70,6 @@ export default function Fishbone({
         width - TOOLTIP_ESTIMATED_WIDTH - TOOLTIP_MARGIN,
       );
       setHover({
-        boneKey,
         title,
         detail,
         x: Math.min(Math.max(TOOLTIP_MARGIN, rawX), maxX),
@@ -89,11 +83,9 @@ export default function Fishbone({
   );
 
   /** 同一份悬停逻辑要挂在引线、标签、数值三处，抽成一个可展开的对象。 */
-  const hoverProps = (boneKey: string, title: string, detail: string | null) => ({
-    onMouseEnter: (event: MouseEvent) =>
-      moveTooltip(event, boneKey, title, detail),
-    onMouseMove: (event: MouseEvent) =>
-      moveTooltip(event, boneKey, title, detail),
+  const hoverProps = (title: string, detail: string | null) => ({
+    onMouseEnter: (event: MouseEvent) => moveTooltip(event, title, detail),
+    onMouseMove: (event: MouseEvent) => moveTooltip(event, title, detail),
   });
 
   if (!layout.bones.length) {
@@ -143,10 +135,24 @@ export default function Fishbone({
           y2={layout.spine.y2}
         />
         <path d={layout.arrow} fill={spineColor} />
+        {/* 鱼头：圆角框 + 同色文字，是整幅图里最重的一处。 */}
+        {layout.headBox && (
+          <rect
+            fill="none"
+            height={layout.headBox.height}
+            rx={layout.headBox.radius}
+            ry={layout.headBox.radius}
+            stroke={headColor}
+            strokeWidth={HEAD_BOX_STROKE_WIDTH}
+            width={layout.headBox.width}
+            x={layout.headBox.x}
+            y={layout.headBox.y}
+          />
+        )}
         {layout.headText && (
           <text
             dominantBaseline="middle"
-            fill={labelColor}
+            fill={headColor}
             fontSize={layout.headText.fontSize}
             fontWeight={600}
             textAnchor={layout.headText.anchor}
@@ -157,94 +163,84 @@ export default function Fishbone({
           </text>
         )}
 
-        {layout.bones.map(bone => {
-          const dimmed = hover !== null && hover.boneKey !== bone.key;
-          return (
-            <g
-              key={bone.key}
-              onMouseLeave={() => setHover(null)}
-              style={{ opacity: dimmed ? DIMMED_OPACITY : 1 }}
+        {layout.bones.map(bone => (
+          <g key={bone.key}>
+            {/* 骨骼本体：线宽随该分支的合计值变化。 */}
+            <line
+              stroke={bone.color}
+              strokeLinecap="round"
+              strokeWidth={bone.bone.width}
+              x1={bone.bone.x1}
+              x2={bone.bone.x2}
+              y1={bone.bone.y1}
+              y2={bone.bone.y2}
+            />
+            {/* 大骨标签与它那根骨骼同色，一眼对得上号。 */}
+            <text
+              dominantBaseline="middle"
+              fill={bone.color}
+              fontSize={bone.labelText.fontSize}
+              fontWeight={600}
+              style={{ cursor: 'default' }}
+              textAnchor={bone.labelText.anchor}
+              x={bone.labelText.x}
+              y={bone.labelText.y}
+              {...hoverProps(bone.label, bone.formattedValue)}
             >
-              {/* 骨骼本体：线宽随该分支的合计值变化。 */}
-              <line
-                stroke={bone.color}
-                strokeLinecap="round"
-                strokeWidth={bone.bone.width}
-                x1={bone.bone.x1}
-                x2={bone.bone.x2}
-                y1={bone.bone.y1}
-                y2={bone.bone.y2}
-              />
-              <text
-                dominantBaseline="middle"
-                fill={labelColor}
-                fontSize={bone.labelText.fontSize}
-                fontWeight={600}
-                style={{ cursor: 'default' }}
-                textAnchor={bone.labelText.anchor}
-                x={bone.labelText.x}
-                y={bone.labelText.y}
-                {...hoverProps(bone.key, bone.label, bone.formattedValue)}
-              >
-                {bone.labelText.text}
-              </text>
+              {bone.labelText.text}
+            </text>
 
-              {bone.rows.map(row => (
-                <g key={row.key}>
-                  <line
-                    stroke={bone.color}
-                    strokeLinecap="round"
-                    strokeWidth={row.leader.width}
-                    x1={row.leader.x1}
-                    x2={row.leader.x2}
-                    y1={row.leader.y1}
-                    y2={row.leader.y2}
-                  />
-                  <line
-                    stroke="transparent"
-                    strokeWidth={HIT_STROKE_WIDTH}
-                    style={{ cursor: 'default' }}
-                    x1={row.leader.x1}
-                    x2={row.leader.x2}
-                    y1={row.leader.y1}
-                    y2={row.leader.y2}
-                    {...hoverProps(bone.key, rowTitle(row), row.valueText?.text ?? null)}
-                  />
+            {bone.rows.map(row => (
+              <g key={row.key}>
+                <line
+                  stroke={bone.color}
+                  strokeLinecap="round"
+                  strokeWidth={row.leader.width}
+                  x1={row.leader.x1}
+                  x2={row.leader.x2}
+                  y1={row.leader.y1}
+                  y2={row.leader.y2}
+                />
+                <line
+                  stroke="transparent"
+                  strokeWidth={HIT_STROKE_WIDTH}
+                  style={{ cursor: 'default' }}
+                  x1={row.leader.x1}
+                  x2={row.leader.x2}
+                  y1={row.leader.y1}
+                  y2={row.leader.y2}
+                  {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
+                />
+                <text
+                  dominantBaseline="middle"
+                  fill={labelColor}
+                  fontSize={row.labelText.fontSize}
+                  style={{ cursor: 'default' }}
+                  textAnchor={row.labelText.anchor}
+                  x={row.labelText.x}
+                  y={row.labelText.y}
+                  {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
+                >
+                  {row.labelText.text}
+                </text>
+                {row.valueText && (
                   <text
                     dominantBaseline="middle"
-                    fill={labelColor}
-                    fontSize={row.labelText.fontSize}
+                    fill={valueColor}
+                    fontSize={row.valueText.fontSize}
                     style={{ cursor: 'default' }}
-                    textAnchor={row.labelText.anchor}
-                    x={row.labelText.x}
-                    y={row.labelText.y}
-                    {...hoverProps(bone.key, rowTitle(row), row.valueText?.text ?? null)}
+                    textAnchor={row.valueText.anchor}
+                    x={row.valueText.x}
+                    y={row.valueText.y}
+                    {...hoverProps(rowTitle(row), row.valueText.text)}
                   >
-                    {row.labelText.text}
+                    {row.valueText.text}
                   </text>
-                  {row.valueText && (
-                    <text
-                      dominantBaseline="middle"
-                      fill={valueColor}
-                      fontSize={row.valueText.fontSize}
-                      style={{ cursor: 'default' }}
-                      textAnchor={row.valueText.anchor}
-                      x={row.valueText.x}
-                      y={row.valueText.y}
-                      {...hoverProps(
-                        bone.key,
-                        rowTitle(row),
-                        row.valueText.text,
-                      )}
-                    >
-                      {row.valueText.text}
-                    </text>
-                  )}
-                </g>
-              ))}
-            </g>
-          );
-        })}
+                )}
+              </g>
+            ))}
+          </g>
+        ))}
       </svg>
       {/* eslint-enable jsx-a11y/prefer-tag-over-role */}
 

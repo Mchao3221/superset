@@ -34,7 +34,6 @@ export interface ParetoFormData extends QueryFormData {
   show_eighty_line?: boolean;
   /** 画出 80/20 分界线：累计占比首次达到 80% 处的竖直分隔线（默认 true）。 */
   show_eighty_twenty_line?: boolean;
-  color_scheme?: string;
   y_axis_format?: string;
 }
 
@@ -57,10 +56,7 @@ export interface ParetoChartFormData {
   showEightyLine?: boolean;
   /** 画出 80/20 分界线（默认 true）。 */
   showEightyTwentyLine?: boolean;
-  colorScheme?: string;
   yAxisFormat?: string;
-  /** Id of the slice, used to keep colours stable across charts. */
-  sliceId?: number;
 }
 
 export interface ParetoTransformedProps {
