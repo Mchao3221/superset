@@ -437,8 +437,8 @@ const StyledDashboardContent = styled.div<{
       width: 0;
       flex: 1;
       position: relative;
-      margin: ${theme.sizeUnit * 4}px;
-      margin-left: ${marginLeft}px;
+      margin: ${isEmbedded() ? 0 : theme.sizeUnit * 4}px;
+      margin-left: ${isEmbedded() ? 0 : marginLeft}px;
 
       ${
         editMode &&
