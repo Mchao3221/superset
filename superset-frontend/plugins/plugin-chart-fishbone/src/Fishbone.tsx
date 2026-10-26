@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { MouseEvent, useCallback, useRef, useState } from 'react';
+import { MouseEvent, useCallback, useId, useRef, useState } from 'react';
 import { t } from '@apache-superset/core/translation';
 import { FishboneProps, LaidOutRow } from './types';
 
@@ -49,8 +49,10 @@ export default function Fishbone({
   width,
   height,
   layout,
-  spineColor,
-  leaderColor,
+  tailColor,
+  headColor,
+  badgeColor,
+  boneColors,
   pillTextColor,
   labelColor,
   valueColor,
@@ -58,6 +60,9 @@ export default function Fishbone({
 }: FishboneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
+  // 同一页面可能有多个鱼骨图，渐变 id 必须逐实例唯一。
+  const gradientId = `fishbone-body-${useId().replace(/:/g, '')}`;
+  const bodyPaint = `url(#${gradientId})`;
 
   const moveTooltip = useCallback(
     (event: MouseEvent, title: string, detail: string | null) => {
@@ -125,10 +130,25 @@ export default function Fishbone({
         style={{ display: 'block', overflow: 'visible' }}
         width={width}
       >
+        {/* 鱼身渐变：从鱼尾的亮蓝过渡到鱼头的深藏青。 */}
+        <defs>
+          <linearGradient
+            gradientUnits="userSpaceOnUse"
+            id={gradientId}
+            x1={layout.spine.x1}
+            x2={layout.spine.x2}
+            y1={layout.spine.y1}
+            y2={layout.spine.y2}
+          >
+            <stop offset="0%" stopColor={tailColor} />
+            <stop offset="60%" stopColor="#1851a6" />
+            <stop offset="100%" stopColor={headColor} />
+          </linearGradient>
+        </defs>
         {/* 鱼尾、主干与鱼头：整条鱼指向被分析的问题。 */}
-        <path d={layout.tailPath} fill={spineColor} />
+        <path d={layout.tailPath} fill={bodyPaint} />
         <line
-          stroke={spineColor}
+          stroke={bodyPaint}
           strokeLinecap="round"
           strokeWidth={layout.spine.width}
           x1={layout.spine.x1}
@@ -136,7 +156,7 @@ export default function Fishbone({
           y1={layout.spine.y1}
           y2={layout.spine.y2}
         />
-        <path d={layout.headPath} fill={spineColor} />
+        <path d={layout.headPath} fill={bodyPaint} />
         {/* 鱼鳃：浅色弧线，让鱼头更有立体感。 */}
         {layout.headGill && (
           <path
@@ -158,14 +178,14 @@ export default function Fishbone({
         <circle
           cx={layout.headEye.cx}
           cy={layout.headEye.cy}
-          fill={spineColor}
+          fill={headColor}
           r={Math.max(1, layout.headEye.r * 0.45)}
         />
 
         {/* 问题气泡：深色底白字，压在鱼头上方的角上。 */}
         {layout.effectBubble && (
           <rect
-            fill={spineColor}
+            fill={badgeColor}
             height={layout.effectBubble.height}
             rx={layout.effectBubble.radius}
             ry={layout.effectBubble.radius}
@@ -175,13 +195,13 @@ export default function Fishbone({
           />
         )}
         {/* 气泡尾巴，向下指向鱼头。 */}
-        {layout.effectTail && <path d={layout.effectTail} fill={spineColor} />}
+        {layout.effectTail && <path d={layout.effectTail} fill={badgeColor} />}
         {layout.effectLines.map(line => (
           <text
             dominantBaseline="middle"
             fill={pillTextColor}
             fontSize={line.fontSize}
-            fontWeight={600}
+            fontWeight={400}
             key={`${line.y}-${line.text}`}
             textAnchor={line.anchor}
             x={line.x}
@@ -191,96 +211,99 @@ export default function Fishbone({
           </text>
         ))}
 
-        {layout.bones.map(bone => (
-          <g key={bone.key}>
-            {/* 大骨汇入主干处的箭头，与主干留出间隙。 */}
-            {bone.baseArrow && <path d={bone.baseArrow} fill={spineColor} />}
-            {/* 主骨本身：从主干斜向伸出，末端是分类胶囊。 */}
-            <line
-              stroke={spineColor}
-              strokeLinecap="round"
-              strokeWidth={bone.bone.width}
-              x1={bone.bone.x1}
-              x2={bone.bone.x2}
-              y1={bone.bone.y1}
-              y2={bone.bone.y2}
-            />
-            <rect
-              fill={spineColor}
-              height={bone.pill.box.height}
-              rx={bone.pill.box.radius}
-              ry={bone.pill.box.radius}
-              width={bone.pill.box.width}
-              x={bone.pill.box.x}
-              y={bone.pill.box.y}
-            />
-            <text
-              dominantBaseline="middle"
-              fill={pillTextColor}
-              fontSize={bone.pill.text.fontSize}
-              fontWeight={600}
-              style={{ cursor: 'default' }}
-              textAnchor={bone.pill.text.anchor}
-              x={bone.pill.text.x}
-              y={bone.pill.text.y}
-              {...hoverProps(bone.label, bone.formattedValue)}
-            >
-              {bone.pill.text.text}
-            </text>
+        {layout.bones.map(bone => {
+          const boneColor = boneColors[bone.key] ?? badgeColor;
+          return (
+            <g key={bone.key}>
+              {/* 大骨汇入主干处的箭头，与主干留出间隙。 */}
+              {bone.baseArrow && <path d={bone.baseArrow} fill={boneColor} />}
+              {/* 主骨本身：从主干斜向伸出，末端是分类胶囊。 */}
+              <line
+                stroke={boneColor}
+                strokeLinecap="round"
+                strokeWidth={bone.bone.width}
+                x1={bone.bone.x1}
+                x2={bone.bone.x2}
+                y1={bone.bone.y1}
+                y2={bone.bone.y2}
+              />
+              <rect
+                fill={boneColor}
+                height={bone.pill.box.height}
+                rx={bone.pill.box.radius}
+                ry={bone.pill.box.radius}
+                width={bone.pill.box.width}
+                x={bone.pill.box.x}
+                y={bone.pill.box.y}
+              />
+              <text
+                dominantBaseline="central"
+                fill={pillTextColor}
+                fontSize={bone.pill.text.fontSize}
+                fontWeight={600}
+                style={{ cursor: 'default' }}
+                textAnchor={bone.pill.text.anchor}
+                x={bone.pill.text.x}
+                y={bone.pill.text.y}
+                {...hoverProps(bone.label, bone.formattedValue)}
+              >
+                {bone.pill.text.text}
+              </text>
 
-            {bone.rows.map(row => (
-              <g key={row.key}>
-                <line
-                  stroke={leaderColor}
-                  strokeLinecap="round"
-                  strokeWidth={row.leader.width}
-                  x1={row.leader.x1}
-                  x2={row.leader.x2}
-                  y1={row.leader.y1}
-                  y2={row.leader.y2}
-                />
-                {/* 箭头指向主骨，表示原因汇入骨骼。 */}
-                <path d={row.arrow} fill={leaderColor} />
-                <line
-                  stroke="transparent"
-                  strokeWidth={HIT_STROKE_WIDTH}
-                  style={{ cursor: 'default' }}
-                  x1={row.leader.x1}
-                  x2={row.leader.x2}
-                  y1={row.leader.y1}
-                  y2={row.leader.y2}
-                  {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
-                />
-                <text
-                  dominantBaseline="middle"
-                  fill={labelColor}
-                  fontSize={row.labelText.fontSize}
-                  style={{ cursor: 'default' }}
-                  textAnchor={row.labelText.anchor}
-                  x={row.labelText.x}
-                  y={row.labelText.y}
-                  {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
-                >
-                  {row.labelText.text}
-                </text>
-                {row.valueText && (
+              {bone.rows.map(row => (
+                <g key={row.key}>
+                  <line
+                    stroke={boneColor}
+                    strokeLinecap="round"
+                    strokeWidth={row.leader.width}
+                    x1={row.leader.x1}
+                    x2={row.leader.x2}
+                    y1={row.leader.y1}
+                    y2={row.leader.y2}
+                  />
+                  {/* 箭头指向主骨，表示原因汇入骨骼。 */}
+                  <path d={row.arrow} fill={boneColor} />
+                  <line
+                    stroke="transparent"
+                    strokeWidth={HIT_STROKE_WIDTH}
+                    style={{ cursor: 'default' }}
+                    x1={row.leader.x1}
+                    x2={row.leader.x2}
+                    y1={row.leader.y1}
+                    y2={row.leader.y2}
+                    {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
+                  />
                   <text
                     dominantBaseline="middle"
-                    fill={valueColor}
-                    fontSize={row.valueText.fontSize}
+                    fill={labelColor}
+                    fontSize={row.labelText.fontSize}
                     style={{ cursor: 'default' }}
-                    textAnchor={row.valueText.anchor}
-                    x={row.valueText.x}
-                    y={row.valueText.y}
-                    {...hoverProps(rowTitle(row), row.valueText.text)}
+                    textAnchor={row.labelText.anchor}
+                    x={row.labelText.x}
+                    y={row.labelText.y}
+                    {...hoverProps(rowTitle(row), row.valueText?.text ?? null)}
                   >
-                    {row.valueText.text}
+                    {row.labelText.text}
                   </text>
-                )}
-              </g>
-            ))}
-          </g>
-        ))}
+                  {row.valueText && (
+                    <text
+                      dominantBaseline="middle"
+                      fill={valueColor}
+                      fontSize={row.valueText.fontSize}
+                      style={{ cursor: 'default' }}
+                      textAnchor={row.valueText.anchor}
+                      x={row.valueText.x}
+                      y={row.valueText.y}
+                      {...hoverProps(rowTitle(row), row.valueText.text)}
+                    >
+                      {row.valueText.text}
+                    </text>
+                  )}
+                </g>
+              ))}
+            </g>
+          );
+        })}
       </svg>
       {/* eslint-enable jsx-a11y/prefer-tag-over-role */}
 

@@ -64,6 +64,13 @@ const MIN_SPINE_LENGTH = 80;
 const PILL_PAD_X = 13;
 const PILL_PAD_Y = 7;
 const PILL_RADIUS = 10;
+/** 胶囊宽度放大倍数，以及胶囊与骨骼末端之间的间隙。 */
+const PILL_WIDTH_SCALE = 1.8;
+const PILL_GAP = 8;
+/** 小骨排列区与胶囊之间额外留出的边界，避免小骨贴到胶囊上。 */
+const ROW_END_GAP = 10;
+/** 靠近主干的小骨文字与鱼头/鱼尾图形之间的横向间隙。 */
+const FISH_TEXT_GAP = 8;
 /** 胶囊标签的字号：在行字号基础上放大，并保证一个足够醒目的下限。 */
 const PILL_FONT_BONUS = 10;
 const PILL_MIN_FONT_SIZE = 26;
@@ -73,8 +80,8 @@ const EFFECT_PAD_Y = 12;
 const EFFECT_LINE_RATIO = 1.45;
 const EFFECT_MAX_LINES = 3;
 /** 问题气泡的字号：比原因文字大，并保证足够醒目。 */
-const EFFECT_FONT_BONUS = 10;
-const EFFECT_MIN_FONT_SIZE = 22;
+const EFFECT_FONT_BONUS = 8;
+const EFFECT_MIN_FONT_SIZE = 20;
 /** 气泡尾巴高度，以及气泡底部与鱼头之间的间距。 */
 const EFFECT_TAIL_HEIGHT = 14;
 const EFFECT_BOTTOM_GAP = 24;
@@ -206,7 +213,7 @@ function computeGeometry(
   };
 }
 
-/** 鱼头轮廓：圆润的头部曲线，外端收成一个带凹口的嘴。 */
+/** 鱼头轮廓：圆润的头部曲线，外端收成一个带凹口的嘴，后缘也是弧线。 */
 function fishHeadPath(g: Geometry): string {
   const { dir, spineY, headBaseX, headTipX, headLen, fishHalf } = g;
   const c1 = headBaseX + dir * headLen * 0.42;
@@ -215,12 +222,15 @@ function fishHeadPath(g: Geometry): string {
   const lowerLipY = spineY + fishHalf * 0.17;
   // 嘴角比嘴尖略微收进头部，上下唇之间形成向内凹的缺口。
   const mouthX = headTipX - dir * headLen * 0.12;
+  // 鱼头后缘（与鱼身相接的一面）向鱼头内部凹进去，形成弧度更大的鱼头轮廓。
+  const backCurveX = headBaseX + dir * headLen * 0.2;
   return [
     `M ${headBaseX} ${spineY - fishHalf}`,
     `C ${c1} ${spineY - fishHalf} ${c2} ${spineY - fishHalf * 0.58} ${headTipX} ${upperLipY}`,
     `C ${headTipX - dir * headLen * 0.07} ${upperLipY} ${mouthX + dir * headLen * 0.03} ${spineY - fishHalf * 0.05} ${mouthX} ${spineY}`,
     `C ${mouthX + dir * headLen * 0.03} ${spineY + fishHalf * 0.05} ${headTipX - dir * headLen * 0.07} ${lowerLipY} ${headTipX} ${lowerLipY}`,
     `C ${c2} ${spineY + fishHalf * 0.58} ${c1} ${spineY + fishHalf} ${headBaseX} ${spineY + fishHalf}`,
+    `C ${backCurveX} ${spineY + fishHalf * 0.45} ${backCurveX} ${spineY - fishHalf * 0.45} ${headBaseX} ${spineY - fishHalf}`,
     'Z',
   ].join(' ');
 }
@@ -376,7 +386,8 @@ function buildSkeleton(
     spine: {
       x1: g.tailBaseX,
       y1: g.spineY,
-      x2: g.headBaseX,
+      // 鱼头后缘是凹进去的弧线，主干多伸入鱼头一点，接缝处不会露出空隙。
+      x2: g.headBaseX + g.dir * g.headLen * 0.17,
       y2: g.spineY,
       width: SPINE_WIDTH,
     },
@@ -421,6 +432,10 @@ interface RowLayoutContext {
   boneThickness: number;
   /** 问题气泡；鱼头一侧的原因行要避开它。 */
   effect: EffectBubble | null;
+  /** 鱼头/鱼尾的几何，用来限制靠主干几行的文字延伸。 */
+  fishHalf: number;
+  tailBaseX: number;
+  headBaseX: number;
 }
 
 /** 一根主骨的行分配方案。 */
@@ -447,18 +462,24 @@ function planBoneRows(
     geo.innerMax >= laneGap ? Math.floor(innerSpan / rowHeight) + 1 : 0;
 
   const kept = sourceRows.slice(0, outerSlots + innerSlots);
-  const dropped = sourceRows.length - kept.length;
+  let dropped = sourceRows.length - kept.length;
 
-  let outerCount = kept.length;
-  let innerCount = 0;
-  if (kept.length > outerSlots) {
-    outerCount = Math.min(Math.ceil(kept.length / 2), outerSlots);
-    innerCount = Math.min(kept.length - outerCount, innerSlots);
-    const remaining = kept.length - outerCount - innerCount;
-    if (remaining > 0) {
-      outerCount += Math.min(remaining, outerSlots - outerCount);
-    }
+  // 两侧均匀分摊：先各分一半，容量不够时再把剩余部分挪到另一侧。
+  let outerCount = Math.min(Math.ceil(kept.length / 2), outerSlots);
+  let innerCount = Math.min(kept.length - outerCount, innerSlots);
+  let remaining = kept.length - outerCount - innerCount;
+  if (remaining > 0) {
+    const addOuter = Math.min(remaining, outerSlots - outerCount);
+    outerCount += addOuter;
+    remaining -= addOuter;
   }
+  if (remaining > 0) {
+    const addInner = Math.min(remaining, innerSlots - innerCount);
+    innerCount += addInner;
+    remaining -= addInner;
+  }
+  // 两侧容量之和理论上覆盖 kept；兜底把仍未分配的行计入丢弃。
+  dropped += remaining;
 
   return { kept, outerCount, innerCount, dropped };
 }
@@ -488,6 +509,9 @@ function layoutBoneRows(
     formatValue,
     boneThickness,
     effect,
+    fishHalf,
+    tailBaseX,
+    headBaseX,
   } = context;
   const rows: LaidOutRow[] = [];
   let dropped = plan.dropped;
@@ -548,10 +572,30 @@ function layoutBoneRows(
           const bubbleBandBottom =
             effect.box.y + effect.box.height + EFFECT_TAIL_HEIGHT + 8;
           if (y < bubbleBandBottom) {
-            edgeLimit =
+            const bubbleLimit =
               sideDir > 0
                 ? effect.box.x - 8
                 : effect.box.x + effect.box.width + 8;
+            edgeLimit =
+              sideDir > 0
+                ? Math.min(edgeLimit, bubbleLimit)
+                : Math.max(edgeLimit, bubbleLimit);
+          }
+        }
+        // 靠近主干的几行文字如果伸向鱼头/鱼尾，就停在鱼形根部之外，
+        // 避免为了贴近主干而压到两端的鱼形上。
+        if (Math.abs(y - spineY) < fishHalf + fontSize * 0.6) {
+          const fishLimit =
+            sideDir === -dir
+              ? tailBaseX + dir * FISH_TEXT_GAP
+              : sideDir === dir
+                ? headBaseX - dir * FISH_TEXT_GAP
+                : null;
+          if (fishLimit !== null) {
+            edgeLimit =
+              sideDir > 0
+                ? Math.min(edgeLimit, fishLimit)
+                : Math.max(edgeLimit, fishLimit);
           }
         }
         available = sideDir < 0 ? leaderEnd - edgeLimit : edgeLimit - leaderEnd;
@@ -640,7 +684,9 @@ function attemptLayout(
   const boneFontSize = Math.max(fontSize + PILL_FONT_BONUS, PILL_MIN_FONT_SIZE);
   const pillHeight = boneFontSize + PILL_PAD_Y * 2;
   const rowHeight = fontSize * ROW_HEIGHT_RATIO;
-  const laneGap = g.fishHalf + fontSize * 0.6;
+  // 下面的大留白保持原样；上面按同样的可见间距向下让出空间。
+  const rowEdgeGap = fontSize * 0.9 + ROW_END_GAP;
+  const laneGap = g.fishHalf + rowEdgeGap;
   const boneByKey = new Map(input.bones.map(bone => [bone.key, bone]));
   const desiredRun = (g.spineY - PAD - pillHeight / 2) / BONE_ANGLE_TAN;
 
@@ -648,7 +694,12 @@ function attemptLayout(
   const geometries: SlotGeometry[] = SLOTS.map(slot => {
     const source = boneByKey.get(slot.key);
     const label = source?.label ?? slot.key;
-    const pillWidth = estimateTextWidth(label, boneFontSize) + PILL_PAD_X * 2;
+    // 四个分类胶囊比文字本身宽 1.8 倍；窄画布上再设上限，避免相邻胶囊相撞。
+    const pillWidth = Math.min(
+      (estimateTextWidth(label, boneFontSize) + PILL_PAD_X * 2) *
+        PILL_WIDTH_SCALE,
+      width * 0.2,
+    );
 
     // 锚点沿主干按比例放置；鱼头在左时比例方向自动翻转。
     const flow = slot.flow === 'head' ? HEAD_FLOW : TAIL_FLOW;
@@ -668,7 +719,15 @@ function attemptLayout(
     const textDir: -1 | 1 = slot.flow === 'tail' ? (dir > 0 ? -1 : 1) : dir;
     const outward: -1 | 1 = slot.side === 'top' ? -1 : 1;
 
-    const baseMax = run * BONE_ANGLE_TAN - pillHeight / 2 - fontSize * 0.9;
+    // 顶部留白取底部大留白的一半；画布太矮时最多收掉行区，
+    // 保证至少还能放下一行。
+    const equalGap = laneGap - SPINE_WIDTH / 2;
+    const availableSpan = run * BONE_ANGLE_TAN - pillHeight / 2 - laneGap;
+    const topGap = Math.min(
+      equalGap / 2,
+      Math.max(0, availableSpan - rowHeight),
+    );
+    const baseMax = run * BONE_ANGLE_TAN - pillHeight / 2 - topGap;
     let outerMax = baseMax;
 
     // 文字排在鱼尾一侧时，越靠近骨骼末端，留给文字的横向空间越小。把铺开
@@ -755,6 +814,9 @@ function attemptLayout(
         formatValue,
         boneThickness: input.baseThickness,
         effect,
+        fishHalf: g.fishHalf,
+        tailBaseX: g.tailBaseX,
+        headBaseX: g.headBaseX,
       },
     );
     dropped += rowDropped;
@@ -776,6 +838,19 @@ function attemptLayout(
     const perpX = -unitY;
     const perpY = unitX;
 
+    // 骨骼末端缩到胶囊外沿之外，让胶囊和骨骼之间留出可见间隙。
+    const tipToPillGap = Math.min(
+      boneLength,
+      Math.min(
+        (geo.pillWidth / 2 + PILL_GAP + thickness / 2) /
+          Math.max(Math.abs(unitX), 1e-6),
+        (pillHeight / 2 + PILL_GAP + thickness / 2) /
+          Math.max(Math.abs(unitY), 1e-6),
+      ),
+    );
+    const boneEndX = geo.tipX - unitX * tipToPillGap;
+    const boneEndY = geo.tipY - unitY * tipToPillGap;
+
     laidOutBones.push({
       key: geo.slot.key,
       label: geo.label,
@@ -784,8 +859,8 @@ function attemptLayout(
       bone: {
         x1: arrowBaseX,
         y1: arrowBaseY,
-        x2: geo.tipX,
-        y2: geo.tipY,
+        x2: boneEndX,
+        y2: boneEndY,
         width: thickness,
       },
       baseArrow:
@@ -821,7 +896,8 @@ function attemptLayout(
       spine: {
         x1: g.tailBaseX,
         y1: g.spineY,
-        x2: g.headBaseX,
+        // 鱼头后缘是凹进去的弧线，主干多伸入鱼头一点，接缝处不会露出空隙。
+        x2: g.headBaseX + g.dir * g.headLen * 0.17,
         y2: g.spineY,
         width: SPINE_WIDTH,
       },

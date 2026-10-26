@@ -40,16 +40,23 @@ import computeFishboneLayout from '../utils/fishboneLayout';
  * 主干、四根主骨、鱼头鱼尾与胶囊标签统一用这一种深蓝：参考图就是单色系，
  * 分类靠位置区分而不是靠颜色，画面更干净，深蓝对白底也有足够的对比度。
  */
-const SPINE_COLOR = '#1e3f75';
+/** 鱼身渐变：鱼尾用亮一点的蓝，鱼头用更深的藏青。 */
+const TAIL_COLOR = '#1860c2';
+const HEAD_COLOR = '#17418a';
+/** 四根主骨胶囊与问题气泡的底色。 */
+const BADGE_COLOR = '#1860c2';
+
+/** 四根大骨各自的颜色，按固定槽位索引。 */
+const BONE_COLORS: Record<string, string> = {
+  人: '#007893',
+  物: '#e3995c',
+  环: '#329f66',
+  法: '#6f3ead',
+};
 
 /**
- * 小刺引线与箭头的颜色。
- *
- * 比主色浅一档的中性灰，视觉上退到原因文字背后，不会和主骨抢注意力。
+ * 深色底上的文字颜色。
  */
-const LEADER_COLOR = '#9aa3ad';
-
-/** 深色底上的文字颜色。 */
 const PILL_TEXT_COLOR = '#ffffff';
 
 /**
@@ -156,8 +163,10 @@ export default function transformProps(chartProps: ChartProps): FishboneProps {
     width,
     height,
     layout,
-    spineColor: SPINE_COLOR,
-    leaderColor: LEADER_COLOR,
+    tailColor: TAIL_COLOR,
+    headColor: HEAD_COLOR,
+    badgeColor: BADGE_COLOR,
+    boneColors: BONE_COLORS,
     pillTextColor: PILL_TEXT_COLOR,
     labelColor: theme.colorText,
     valueColor: theme.colorTextSecondary,

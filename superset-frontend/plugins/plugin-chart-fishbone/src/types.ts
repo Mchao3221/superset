@@ -215,10 +215,14 @@ export interface FishboneProps {
   width: number;
   height: number;
   layout: FishboneLayout;
-  /** 主干、鱼头、鱼尾与四根主骨共用的主色。 */
-  spineColor: string;
-  /** 小刺引线与箭头的颜色。 */
-  leaderColor: string;
+  /** 鱼尾颜色，也是鱼身渐变的起点。 */
+  tailColor: string;
+  /** 鱼头颜色，也是鱼身渐变的终点。 */
+  headColor: string;
+  /** 四根主骨胶囊与问题气泡的底色。 */
+  badgeColor: string;
+  /** 四根大骨各自的颜色，按固定槽位 key（人/物/法/环）索引。 */
+  boneColors: Record<string, string>;
   /** 主骨胶囊标签的文字色。 */
   pillTextColor: string;
   /** 行标签的文字配色。 */
