@@ -17,12 +17,11 @@
  * under the License.
  */
 import { MouseEvent, useCallback, useRef, useState } from 'react';
+import { t } from '@apache-superset/core/translation';
 import { FishboneProps, LaidOutRow } from './types';
 
-/** 引线加粗后的命中宽度：引线本身只有 1px，直接悬停很难点中。 */
+/** 引线加粗后的命中宽度：引线本身只有 1.5px，直接悬停很难点中。 */
 const HIT_STROKE_WIDTH = 10;
-/** 鱼头外框的描边宽度。 */
-const HEAD_BOX_STROKE_WIDTH = 2;
 /** tooltip 与鼠标之间的间隙。 */
 const TOOLTIP_OFFSET = 14;
 /** tooltip 距离容器边缘的最小留白。 */
@@ -31,7 +30,7 @@ const TOOLTIP_MARGIN = 8;
 const TOOLTIP_ESTIMATED_WIDTH = 240;
 
 interface HoverState {
-  /** 第一行：这条原因的完整路径，或大骨自身的名字。 */
+  /** 第一行：这条原因的完整路径，或主骨自身的名字。 */
   title: string;
   /** 第二行：数值，没有度量时为 null。 */
   detail: string | null;
@@ -51,11 +50,11 @@ export default function Fishbone({
   height,
   layout,
   spineColor,
-  headColor,
+  leaderColor,
+  pillTextColor,
   labelColor,
   valueColor,
   noDataText,
-  droppedRowsNotice,
 }: FishboneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -107,6 +106,8 @@ export default function Fishbone({
   }
 
   const rowTitle = (row: LaidOutRow) => row.path.join(' → ');
+  const ariaLabel =
+    layout.effectLines.map(line => line.text).join(' ') || t('Fishbone');
 
   return (
     <div
@@ -118,13 +119,14 @@ export default function Fishbone({
           加可访问名才是正确的读屏语义，因此对这一段关闭该规则。 */}
       {/* eslint-disable jsx-a11y/prefer-tag-over-role -- 生成的图表只能用 SVG 表达 */}
       <svg
-        aria-label={layout.headText?.text}
+        aria-label={ariaLabel}
         height={height}
         role="img"
         style={{ display: 'block', overflow: 'visible' }}
         width={width}
       >
-        {/* 主干与鱼头：鱼头就是被分析的问题，箭头指向它。 */}
+        {/* 鱼尾、主干与鱼头：整条鱼指向被分析的问题。 */}
+        <path d={layout.tailPath} fill={spineColor} />
         <line
           stroke={spineColor}
           strokeLinecap="round"
@@ -134,40 +136,68 @@ export default function Fishbone({
           y1={layout.spine.y1}
           y2={layout.spine.y2}
         />
-        <path d={layout.arrow} fill={spineColor} />
-        {/* 鱼头：圆角框 + 同色文字，是整幅图里最重的一处。 */}
-        {layout.headBox && (
-          <rect
+        <path d={layout.headPath} fill={spineColor} />
+        {/* 鱼鳃：浅色弧线，让鱼头更有立体感。 */}
+        {layout.headGill && (
+          <path
+            d={layout.headGill}
             fill="none"
-            height={layout.headBox.height}
-            rx={layout.headBox.radius}
-            ry={layout.headBox.radius}
-            stroke={headColor}
-            strokeWidth={HEAD_BOX_STROKE_WIDTH}
-            width={layout.headBox.width}
-            x={layout.headBox.x}
-            y={layout.headBox.y}
+            stroke={pillTextColor}
+            strokeLinecap="round"
+            strokeOpacity={0.4}
+            strokeWidth={Math.max(1.5, layout.headEye.r * 0.3)}
           />
         )}
-        {layout.headText && (
+        <circle
+          cx={layout.headEye.cx}
+          cy={layout.headEye.cy}
+          fill="#ffffff"
+          r={layout.headEye.r}
+        />
+        {/* 瞳孔，和鱼身同色。 */}
+        <circle
+          cx={layout.headEye.cx}
+          cy={layout.headEye.cy}
+          fill={spineColor}
+          r={Math.max(1, layout.headEye.r * 0.45)}
+        />
+
+        {/* 问题气泡：深色底白字，压在鱼头上方的角上。 */}
+        {layout.effectBubble && (
+          <rect
+            fill={spineColor}
+            height={layout.effectBubble.height}
+            rx={layout.effectBubble.radius}
+            ry={layout.effectBubble.radius}
+            width={layout.effectBubble.width}
+            x={layout.effectBubble.x}
+            y={layout.effectBubble.y}
+          />
+        )}
+        {/* 气泡尾巴，向下指向鱼头。 */}
+        {layout.effectTail && <path d={layout.effectTail} fill={spineColor} />}
+        {layout.effectLines.map(line => (
           <text
             dominantBaseline="middle"
-            fill={headColor}
-            fontSize={layout.headText.fontSize}
+            fill={pillTextColor}
+            fontSize={line.fontSize}
             fontWeight={600}
-            textAnchor={layout.headText.anchor}
-            x={layout.headText.x}
-            y={layout.headText.y}
+            key={`${line.y}-${line.text}`}
+            textAnchor={line.anchor}
+            x={line.x}
+            y={line.y}
           >
-            {layout.headText.text}
+            {line.text}
           </text>
-        )}
+        ))}
 
         {layout.bones.map(bone => (
           <g key={bone.key}>
-            {/* 骨骼本体：线宽随该分支的合计值变化。 */}
+            {/* 大骨汇入主干处的箭头，与主干留出间隙。 */}
+            {bone.baseArrow && <path d={bone.baseArrow} fill={spineColor} />}
+            {/* 主骨本身：从主干斜向伸出，末端是分类胶囊。 */}
             <line
-              stroke={bone.color}
+              stroke={spineColor}
               strokeLinecap="round"
               strokeWidth={bone.bone.width}
               x1={bone.bone.x1}
@@ -175,25 +205,33 @@ export default function Fishbone({
               y1={bone.bone.y1}
               y2={bone.bone.y2}
             />
-            {/* 大骨标签与它那根骨骼同色，一眼对得上号。 */}
+            <rect
+              fill={spineColor}
+              height={bone.pill.box.height}
+              rx={bone.pill.box.radius}
+              ry={bone.pill.box.radius}
+              width={bone.pill.box.width}
+              x={bone.pill.box.x}
+              y={bone.pill.box.y}
+            />
             <text
               dominantBaseline="middle"
-              fill={bone.color}
-              fontSize={bone.labelText.fontSize}
+              fill={pillTextColor}
+              fontSize={bone.pill.text.fontSize}
               fontWeight={600}
               style={{ cursor: 'default' }}
-              textAnchor={bone.labelText.anchor}
-              x={bone.labelText.x}
-              y={bone.labelText.y}
+              textAnchor={bone.pill.text.anchor}
+              x={bone.pill.text.x}
+              y={bone.pill.text.y}
               {...hoverProps(bone.label, bone.formattedValue)}
             >
-              {bone.labelText.text}
+              {bone.pill.text.text}
             </text>
 
             {bone.rows.map(row => (
               <g key={row.key}>
                 <line
-                  stroke={bone.color}
+                  stroke={leaderColor}
                   strokeLinecap="round"
                   strokeWidth={row.leader.width}
                   x1={row.leader.x1}
@@ -201,6 +239,8 @@ export default function Fishbone({
                   y1={row.leader.y1}
                   y2={row.leader.y2}
                 />
+                {/* 箭头指向主骨，表示原因汇入骨骼。 */}
+                <path d={row.arrow} fill={leaderColor} />
                 <line
                   stroke="transparent"
                   strokeWidth={HIT_STROKE_WIDTH}
@@ -244,20 +284,6 @@ export default function Fishbone({
       </svg>
       {/* eslint-enable jsx-a11y/prefer-tag-over-role */}
 
-      {droppedRowsNotice && (
-        <div
-          style={{
-            bottom: 0,
-            color: valueColor,
-            fontSize: 11,
-            position: 'absolute',
-            right: 0,
-          }}
-        >
-          {droppedRowsNotice}
-        </div>
-      )}
-
       {hover && (
         <div
           style={{
@@ -277,9 +303,7 @@ export default function Fishbone({
           }}
         >
           <div>{hover.title}</div>
-          {hover.detail && (
-            <div style={{ opacity: 0.75 }}>{hover.detail}</div>
-          )}
+          {hover.detail && <div style={{ opacity: 0.75 }}>{hover.detail}</div>}
         </div>
       )}
     </div>

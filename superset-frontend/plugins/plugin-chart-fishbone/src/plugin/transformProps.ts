@@ -18,8 +18,6 @@
  */
 import {
   ChartProps,
-  getAnalogousColors,
-  getCategoricalSchemeRegistry,
   getColumnLabel,
   getMetricLabel,
   getNumberFormatter,
@@ -37,72 +35,22 @@ import buildFishboneBones from '../utils/fishboneData';
 import computeFishboneLayout from '../utils/fishboneLayout';
 
 /**
- * 主轴（鱼脊）的颜色。
+ * 整条鱼的主色。
  *
- * 固定色值，不跟随主题的文字色：主轴是整幅图的骨架，要和彩色的次级轴拉开
- * 层次；鱼头箭头与它同色，看上去才是同一根骨头。
+ * 主干、四根主骨、鱼头鱼尾与胶囊标签统一用这一种深蓝：参考图就是单色系，
+ * 分类靠位置区分而不是靠颜色，画面更干净，深蓝对白底也有足够的对比度。
  */
-const SPINE_COLOR = '#22324a';
+const SPINE_COLOR = '#1e3f75';
 
 /**
- * 鱼头文字与其外框的颜色。
+ * 小刺引线与箭头的颜色。
  *
- * 用偏暗的砖红，和主轴的深藏青、次级轴的分类色都不同色系：鱼头是被分析的
- * 问题本身，不该和原因们混在一起。
+ * 比主色浅一档的中性灰，视觉上退到原因文字背后，不会和主骨抢注意力。
  */
-const HEAD_COLOR = '#c0392b';
+const LEADER_COLOR = '#9aa3ad';
 
-/**
- * 配色表取不到颜色时的兜底次级轴配色。
- *
- * 正常情况颜色来自 `color_scheme` 选的配色表，但注册表可能为空（例如插件
- * 被单独挂载）。兜底不能让所有骨骼退回同一个颜色 —— 交错排布之后上下相邻
- * 的两根同色，就分不清哪根是哪根了。
- */
-const FALLBACK_BONE_COLORS = [
-  '#1FA8C9',
-  '#FF7F44',
-  '#5AC189',
-  '#E04355',
-  '#A868B7',
-  '#FCC700',
-  '#3CCCCB',
-  '#454E7C',
-  '#A38F79',
-  '#666666',
-];
-
-/**
- * 给每根次级轴（大骨）分配一个互不相同的颜色。
- *
- * 按序号取色，而不是走 `CategoricalColorScale` 的按值映射 —— 那条路在配色
- * 表用尽之后会重复用色，而交错排布下相邻两根同色就分不出彼此了。序号超出
- * 配色表长度时补一批同色系的近似色，保证仍然两两不同。
- */
-export function buildBoneColors(
-  boneKeys: string[],
-  colorScheme?: string,
-): Record<string, string> {
-  const registry = getCategoricalSchemeRegistry();
-  // 传进来的配色表名可能已经不在注册表里，`get` 会自动退回默认配色表。
-  const schemeColors = registry.get(colorScheme)?.colors ?? [];
-  const palette = schemeColors.length ? schemeColors : FALLBACK_BONE_COLORS;
-  const colors =
-    palette.length >= boneKeys.length
-      ? palette
-      : [
-          ...palette,
-          ...getAnalogousColors(
-            palette,
-            Math.ceil(boneKeys.length / palette.length),
-          ),
-        ];
-
-  return boneKeys.reduce<Record<string, string>>((acc, key, index) => {
-    acc[key] = colors[index];
-    return acc;
-  }, {});
-}
+/** 深色底上的文字颜色。 */
+const PILL_TEXT_COLOR = '#ffffff';
 
 /**
  * 取出结果里各层级维度对应的列名。
@@ -162,7 +110,6 @@ export default function transformProps(chartProps: ChartProps): FishboneProps {
     showValues = true,
     fontSize = 'm',
     boneThickness = 'medium',
-    colorScheme,
     yAxisFormat,
   } = formData as FishboneChartFormData;
 
@@ -170,15 +117,23 @@ export default function transformProps(chartProps: ChartProps): FishboneProps {
   const rows = queryData?.data ?? [];
   const colnames = queryData?.colnames ?? [];
 
+  // 第二条查询读取数据集里的 EffectTitle；读不到时回退到图表控件里的值。
+  const configRow = queriesData?.[1]?.data?.[0];
+  const dbEffectTitle =
+    configRow &&
+    configRow.EffectTitle !== null &&
+    configRow.EffectTitle !== undefined
+      ? String(configRow.EffectTitle).trim()
+      : '';
+  const effectTitle = dbEffectTitle || effectName;
+
   const levelColumns = resolveLevelColumns(groupby, colnames);
   const metricColumn = resolveMetricColumn(metric, colnames, levelColumns);
-  const bones = buildFishboneBones({ rows, levelColumns, metricColumn });
-
-  // 每根次级轴一个互不相同的颜色。
-  const boneColors = buildBoneColors(
-    bones.map(bone => bone.key),
-    colorScheme,
-  );
+  const { bones, unmatchedRows } = buildFishboneBones({
+    rows,
+    levelColumns,
+    metricColumn,
+  });
 
   const numberFormatter = getNumberFormatter(yAxisFormat);
 
@@ -186,30 +141,29 @@ export default function transformProps(chartProps: ChartProps): FishboneProps {
     width,
     height,
     bones,
-    effectName,
+    effectName: effectTitle,
     headPosition,
     showValues,
     baseFontSize: FONT_SIZE_PX[fontSize],
     baseThickness: BONE_THICKNESS_PX[boneThickness],
-    boneColors,
     formatValue: value => numberFormatter(value),
   });
+
+  // 有数据但第一层维度一个都没归入固定分类时，直接说清原因，别只提示「无数据」。
+  const hasCauses = bones.some(bone => bone.rows.length > 0);
 
   return {
     width,
     height,
     layout,
     spineColor: SPINE_COLOR,
-    headColor: HEAD_COLOR,
+    leaderColor: LEADER_COLOR,
+    pillTextColor: PILL_TEXT_COLOR,
     labelColor: theme.colorText,
     valueColor: theme.colorTextSecondary,
-    noDataText: t('No data'),
-    // 插值放在这里完成，渲染层只负责显示最终文案。
-    droppedRowsNotice:
-      layout.droppedRows > 0
-        ? t('%(count)s cause(s) hidden — enlarge the chart', {
-            count: layout.droppedRows,
-          })
-        : null,
+    noDataText:
+      !hasCauses && unmatchedRows > 0
+        ? t('No causes mapped to 人 / 物 / 法 / 环')
+        : t('No data'),
   };
 }

@@ -21761,3 +21761,50 @@ msgstr "只显示累计占比不超过该值的行；排名第一的行始终显
 
 msgid "Vital Few Threshold (%)"
 msgstr "关键少数阈值（%）"
+
+# Fishbone chart
+msgid "Bone Thickness"
+msgstr "主骨线宽"
+
+msgid "Base size of the cause labels. The chart shrinks it automatically when space runs out."
+msgstr "原因标签的基准字号。空间不足时图表会自动缩小。"
+
+msgid "Dimensions that form the fishbone, in order. The first column is matched to the four fixed main bones (人 / 物 / 法 / 环); the remaining columns provide the causes, and only the deepest level is drawn."
+msgstr "构成鱼骨图的维度，按顺序排列。第一列会归入固定的四根主骨（人 / 物 / 法 / 环）；其余列提供具体原因，只绘制最末一层。"
+
+msgid "Effect"
+msgstr "问题"
+
+msgid "Fishbone"
+msgstr "鱼骨图"
+
+msgid "Head Position"
+msgstr "鱼头位置"
+
+msgid "Label Size"
+msgstr "标签字号"
+
+msgid "No causes mapped to 人 / 物 / 法 / 环"
+msgstr "没有归入「人 / 物 / 法 / 环」的原因"
+
+msgid "Print the metric value next to each cause."
+msgstr "在每条原因旁显示度量值。"
+
+msgid "The problem being analysed, shown in the bubble above the fish head. When the dataset has an EffectTitle column, that value takes precedence."
+msgstr "要分析的问题，显示在鱼头上方的气泡中。数据集存在 EffectTitle 字段时，优先使用该字段的值。"
+
+msgid "Thick"
+msgstr "粗"
+
+msgid "Thickness of the four main bones. All four share the same width; the metric only orders the causes and prints values."
+msgstr "四根主骨的线宽。四根主骨使用同一线宽；度量只用于排序原因和显示数值。"
+
+msgid "Thin"
+msgstr "细"
+
+msgid "Weighs the causes: it orders the causes inside each bone and prints their values."
+msgstr "原因权重：在每根主骨内对原因排序，并显示各自的数值。"
+
+msgid "Which end of the spine the fish head sits on."
+msgstr "鱼头位于主干哪一端。"
+

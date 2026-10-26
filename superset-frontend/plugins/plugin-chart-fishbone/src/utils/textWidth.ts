@@ -91,3 +91,58 @@ export function truncateToWidth(
   }
   return kept.length ? `${kept}${ELLIPSIS}` : ELLIPSIS;
 }
+
+/**
+ * 把一段文字按估算宽度折成若干行。
+ *
+ * 中文没有词边界，按字符贪心换行即可；超出行数上限时把最后一行截断并补上
+ * 省略号，保证气泡高度是确定的，不会因为问题描述特别长而撑破画布。
+ */
+export function wrapText(
+  text: string,
+  fontSize: number,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const trimmed = text.trim();
+  if (!trimmed || maxWidth <= 0 || maxLines <= 0) {
+    return [];
+  }
+
+  const all: string[] = [];
+  let current = '';
+  for (const char of trimmed) {
+    if (char === '\n') {
+      all.push(current);
+      current = '';
+    } else if (
+      current &&
+      estimateTextWidth(current + char, fontSize) > maxWidth
+    ) {
+      all.push(current);
+      current = char;
+    } else {
+      current += char;
+    }
+  }
+  if (current) {
+    all.push(current);
+  }
+
+  if (all.length <= maxLines) {
+    return all;
+  }
+
+  const kept = all.slice(0, maxLines);
+  const last = kept[maxLines - 1];
+  const ellipsisWidth = estimateTextWidth(ELLIPSIS, fontSize);
+  let trimmedLast = last;
+  while (
+    trimmedLast &&
+    estimateTextWidth(trimmedLast, fontSize) + ellipsisWidth > maxWidth
+  ) {
+    trimmedLast = [...trimmedLast].slice(0, -1).join('');
+  }
+  kept[maxLines - 1] = `${trimmedLast}${ELLIPSIS}`;
+  return kept;
+}

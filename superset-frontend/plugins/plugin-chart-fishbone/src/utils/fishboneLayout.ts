@@ -20,93 +20,91 @@ import {
   FishboneBone,
   FishboneLayout,
   FishboneRow,
+  FixedBoneLabel,
   HeadPosition,
   LaidOutBone,
   LaidOutBox,
+  LaidOutCircle,
   LaidOutRow,
   LaidOutText,
 } from '../types';
-import estimateTextWidth, { truncateToWidth } from './textWidth';
+import estimateTextWidth, { truncateToWidth, wrapText } from './textWidth';
 
 /** 画布四周留白。 */
 const PAD = 16;
-/** 箭头的长度与半高。 */
-const ARROW_LENGTH = 14;
-const ARROW_HALF = 6;
-/** 鱼头文字与箭头之间的间隙。 */
-const HEAD_GAP = 8;
-/** 鱼头外框相对文字的内边距。 */
-const HEAD_BOX_PAD_X = 6;
-const HEAD_BOX_PAD_Y = 4;
-/** 鱼头外框的圆角半径。 */
-const HEAD_BOX_RADIUS = 6;
-/** 大骨标签越过骨骼末端的距离。 */
-const BONE_LABEL_GAP = 6;
-/**
- * 行高相对行字号的倍数。
- *
- * 单行标签之间的垂直间距。压得太紧时相邻两行看着挤在一起；调大它会让同一块
- * 画布能放下的行变少、字号被迫缩小，所以每加一档都要复核密集数据的表现。
- */
-const ROW_HEIGHT_RATIO = 2.304;
-/** 大骨标签占用高度相对其字号的倍数。 */
-const BONE_LABEL_RATIO = 1.6;
-/** 行引线的最短长度，保证标签不会贴到骨骼上。 */
-const LEADER_MIN = 12;
-/** 每深一层额外增加的引线长度，用作层级缩进。 */
-const INDENT_PER_DEPTH = 14;
-/** 标签与数值之间的间隙。 */
+/** 主干（横向鱼身）线宽。 */
+const SPINE_WIDTH = 20;
+/** 小刺引线的线宽，比主骨细一档。 */
+const LEADER_WIDTH = 2;
+/** 小骨引线的长度：从主骨中心到文字的横向距离。 */
+const LEADER_LENGTH = 64;
+/** 箭头三角形的长度与半高。 */
+const ARROW_LENGTH = 8;
+const ARROW_HALF = 3.5;
+/** 小刺箭头尖与主骨边缘之间的间隙，避免小刺贴住主骨。 */
+const ARROW_CLEARANCE = 8;
+/** 大骨与主干连接处的箭头尖到主干中心的间隙。 */
+const MAIN_ARROW_GAP = 8;
+/** 行高相对行字号的倍数。 */
+const ROW_HEIGHT_RATIO = 1.65;
+/** 相邻两行标签之间的间隙。 */
 const VALUE_GAP = 8;
 /**
- * 行字号下限。
+ * 同一侧两根主骨内侧文字之间的最小间隙。
  *
- * 空间不够时宁可少画几行，也不把字缩到看不清 —— 缩到这个字号仍放不下的行
- * 会被丢弃，数量在右下角如实提示。低于 12px 的中文在实际屏幕尺寸下已经很难
- * 辨认，所以下限就定在这里。
+ * 图较矮时原因行会排到主骨的另一侧；同一侧的两根主骨内侧是相向的，两边的
+ * 文字在两条主骨中线处各让出一半间隙，避免互相压住。
  */
-const MIN_FONT_SIZE = 12;
-/** 鱼头文字相对基准字号的上浮量。 */
-const HEAD_FONT_BONUS = 2;
-/** 大骨与主干的夹角（60 度）及其正切。 */
-const BONE_ANGLE_TAN = Math.tan((60 * Math.PI) / 180);
+const INNER_GAP = 12;
+/** 主骨与主干夹角的余切关系：tan(55°)。 */
+const BONE_ANGLE_TAN = Math.tan((55 * Math.PI) / 180);
 /** 主干最短长度，短于此值说明横向空间已经不够。 */
 const MIN_SPINE_LENGTH = 80;
+/** 胶囊标签的内边距与圆角。 */
+const PILL_PAD_X = 13;
+const PILL_PAD_Y = 7;
+const PILL_RADIUS = 10;
+/** 胶囊标签的字号：在行字号基础上放大，并保证一个足够醒目的下限。 */
+const PILL_FONT_BONUS = 10;
+const PILL_MIN_FONT_SIZE = 26;
+/** 问题气泡的内边距、行高倍数与最大行数。 */
+const EFFECT_PAD_X = 12;
+const EFFECT_PAD_Y = 12;
+const EFFECT_LINE_RATIO = 1.45;
+const EFFECT_MAX_LINES = 3;
+/** 问题气泡的字号：比原因文字大，并保证足够醒目。 */
+const EFFECT_FONT_BONUS = 10;
+const EFFECT_MIN_FONT_SIZE = 22;
+/** 气泡尾巴高度，以及气泡底部与鱼头之间的间距。 */
+const EFFECT_TAIL_HEIGHT = 14;
+const EFFECT_BOTTOM_GAP = 24;
 /**
- * 骨骼沿主轴的间距，取「放得下」的最大间距的比例。
+ * 问题气泡的最大宽度。
  *
- * 主干铺满画布能让骨骼摊得最开，但整条鱼会被拉得很长；收到 0.6 之后相邻两根
- * 挨得更近，鱼身随之变短，代价是画布左边会空出一块。
+ * 收窄到画布宽度的四分之一左右：文字变多时优先换行、让气泡向上长高，
+ * 而不是一路横向拉长；这样更像对话框，也不会把鱼头上方的空间占满。
  */
-const SPINE_SPACING_RATIO = 0.6;
-/** 单条标签最多占用的横向比例，超出即截断，保证布局一定收敛。 */
-const LABEL_WIDTH_BUDGET = 0.55;
-/** 鱼头文字最多占用的横向比例。 */
-const HEAD_WIDTH_BUDGET = 0.4;
+const EFFECT_WIDTH_RATIO = 0.26;
+const EFFECT_MAX_WIDTH = 240;
+const EFFECT_MIN_WIDTH = 160;
+/** 行字号下限：内容过多时允许缩到 11px，再小就改为丢弃原因。 */
+const MIN_FONT_SIZE = 11;
 /** 缩字号的尝试次数上限。 */
 const MAX_FONT_STEPS = 12;
-/** 大骨线宽相对基准线宽的最细／最粗倍数。 */
-const THINNEST_RATIO = 0.55;
-const THICKEST_RATIO = 1.45;
-/** 兜底骨骼颜色，仅在配色表里查不到时使用。 */
-const DEFAULT_BONE_COLOR = '#5b7fbd';
-/**
- * 行引线（中骨／小骨）的固定线宽。
- *
- * 与骨骼一样按「粗一倍」的档位取值；比骨骼细一档，读图时才能一眼分出主干、
- * 大骨和挂在它们下面的具体原因。
- */
-const LEADER_WIDTH = 2;
-/**
- * 主干线宽。
- *
- * 与 `BONE_THICKNESS_PX`（见 ../types）的基准值同量级：主干是鱼骨的主心骨，
- * 比它分出去的骨骼还细的话，整条鱼看上去会散架。
- */
-const SPINE_WIDTH = 5;
+/** 鱼头 / 鱼尾的半高与长度比例。 */
+const FISH_HALF_RATIO = 0.17;
+const FISH_HALF_MIN = 28;
+const FISH_HALF_MAX = 84;
+const HEAD_LEN_RATIO = 2.2;
+const TAIL_LEN_RATIO = 1.9;
+/** 主骨锚点沿主干（从鱼尾到鱼头）的相对位置。 */
+const TAIL_FLOW = 0.3;
+const HEAD_FLOW = 0.7;
 
 export interface FishboneLayoutInput {
   width: number;
   height: number;
+  /** 固定四根主骨及其原因行。 */
   bones: FishboneBone[];
   /** 鱼头文字，即要分析的问题。 */
   effectName: string;
@@ -114,866 +112,776 @@ export interface FishboneLayoutInput {
   showValues: boolean;
   /** 行标签的基准字号，由控件档位决定。 */
   baseFontSize: number;
-  /** 大骨基准线宽，由控件档位决定。 */
+  /** 主骨线宽，由控件档位决定。 */
   baseThickness: number;
-  /** 大骨 key → 颜色。 */
-  boneColors: Record<string, string>;
   formatValue: (value: number) => string;
 }
 
-/** 量算后的行：宽度与最终要画的文字都已确定。 */
-interface MeasuredRow {
-  row: FishboneRow;
-  /** 实际画在画布上的文字（超长时已截断）。 */
-  displayLabel: string;
-  /** 从骨骼点到文字的引线长度，随层级递增。 */
-  leaderLength: number;
-  /** 数值文字，未开启或无度量时为 null。 */
-  displayValue: string | null;
-  labelWidth: number;
-  valueWidth: number;
-  /** 自骨骼点向左延伸的总距离。 */
-  reach: number;
-}
-
-/** 量算后的骨骼：只含与位置无关的尺寸。 */
-interface MeasuredBone {
-  bone: FishboneBone;
-  displayLabel: string;
-  rows: MeasuredRow[];
-  /** 大骨标签占用的高度。 */
-  labelHeight: number;
-  /** 整根骨骼在垂直方向占用的高度。 */
-  height: number;
-}
-
-/** 已定位的骨骼：带有相对主干的垂直区间。 */
-interface PositionedBone {
-  measured: MeasuredBone;
-  /** 内侧（靠近主干）与外侧（远离主干）距主干的垂直距离。 */
-  inner: number;
-  outer: number;
-}
-
-/**
- * 骨骼在主干上的槽位。
- *
- * 槽位序号决定骨骼的横向位置（序号越小越靠鱼头），`sign` 决定它画在主干
- * 的哪一侧。两者一一对应，因此每根骨骼在图上都有自己的位置。
- */
-interface BoneSlot {
-  item: PositionedBone;
-  /** -1 表示画在主干上方，1 表示下方。 */
-  sign: -1 | 1;
-}
-
-interface MeasureOptions {
-  fontSize: number;
-  boneFontSize: number;
-  labelBudget: number;
-  showValues: boolean;
-  formatValue: (value: number) => string;
-}
-
-interface BoneRenderContext {
-  input: FishboneLayoutInput;
-  maxBoneValue: number;
-  fontSize: number;
-  boneFontSize: number;
-  rowHeight: number;
-}
-
-interface BoneGeometry {
-  context: BoneRenderContext;
+/** 画布几何：主干两端、鱼头鱼尾尺寸。 */
+interface Geometry {
+  dir: 1 | -1;
   spineY: number;
-  xRight: number;
-  spineLength: number;
+  /** 鱼尾尖端、尾鳍根部与鱼头根部、嘴尖的横坐标。 */
+  tailTipX: number;
+  tailBaseX: number;
+  headTipX: number;
+  headBaseX: number;
+  fishHalf: number;
+  headLen: number;
+  tailLen: number;
 }
 
-/** 一行行高，由行字号推出。 */
-function rowHeightOf(fontSize: number): number {
-  return fontSize * ROW_HEIGHT_RATIO;
-}
-
-/**
- * 一根骨骼自其锚点向左延伸的最大距离。
- *
- * 骨骼是斜的，行挂得越高，骨骼在那一点就越靠左；行自身还要再往左让出引线
- * 和文字。取两者的最大值，就是这根骨骼「最左能到哪」。
- *
- * 行的垂直位置要算上骨骼自身的带偏移 `item.inner`——同一侧靠外的骨骼，
- * 它的每一行都比靠内的骨骼整体更靠外、也更靠左。漏掉这一项会低估外侧
- * 骨骼的占用，主干就会解得过长，文字随之溢出画布。
- */
-function boneReach(item: PositionedBone, rowHeight: number): number {
-  let reach = item.outer / BONE_ANGLE_TAN;
-  item.measured.rows.forEach((row, index) => {
-    const distance = item.inner + (index + 0.5) * rowHeight;
-    reach = Math.max(reach, distance / BONE_ANGLE_TAN + row.reach);
-  });
-  return reach;
-}
-
-/** 全局按数值降序保留前 `budget` 行，其余丢弃；大骨标签本身始终保留。 */
-function keepTopRows(bones: FishboneBone[], budget: number): FishboneBone[] {
-  const entries = bones.flatMap((bone, boneIndex) =>
-    bone.rows.map((row, rowIndex) => ({ row, boneIndex, rowIndex })),
-  );
-  if (budget >= entries.length) {
-    return bones;
-  }
-  const kept = new Set(
-    [...entries]
-      // 值相同时按原始顺序，保证结果稳定可复现。
-      .sort(
-        (a, b) =>
-          b.row.value - a.row.value ||
-          a.boneIndex - b.boneIndex ||
-          a.rowIndex - b.rowIndex,
-      )
-      .slice(0, Math.max(0, budget))
-      .map(entry => `${entry.boneIndex}:${entry.row.key}`),
-  );
-  return bones.map((bone, boneIndex) => ({
-    ...bone,
-    rows: bone.rows.filter(row => kept.has(`${boneIndex}:${row.key}`)),
-  }));
-}
-
-/** 量出一根骨骼及其所有行的尺寸。文字截断在这里做一次，后续直接复用。 */
-function measureBone(
-  bone: FishboneBone,
-  options: MeasureOptions,
-): MeasuredBone {
-  const { fontSize, boneFontSize, labelBudget, showValues, formatValue } =
-    options;
-
-  const rows = bone.rows.map(row => {
-    const displayLabel = truncateToWidth(row.label, fontSize, labelBudget);
-    const leaderLength =
-      LEADER_MIN + Math.max(0, row.depth - 1) * INDENT_PER_DEPTH;
-    const labelWidth = estimateTextWidth(displayLabel, fontSize);
-    const displayValue = showValues ? formatValue(row.value) : null;
-    const valueWidth = displayValue
-      ? estimateTextWidth(displayValue, fontSize)
-      : 0;
-    return {
-      row,
-      displayLabel,
-      leaderLength,
-      displayValue,
-      labelWidth,
-      valueWidth,
-      reach:
-        leaderLength + labelWidth + (displayValue ? VALUE_GAP + valueWidth : 0),
-    };
-  });
-
-  const labelHeight = boneFontSize * BONE_LABEL_RATIO;
-
-  return {
-    bone,
-    displayLabel: truncateToWidth(bone.label, boneFontSize, labelBudget),
-    rows,
-    labelHeight,
-    height: labelHeight + rows.length * rowHeightOf(fontSize),
-  };
-}
-
-/** 按数值从大到小把骨骼分给当前更矮的一侧，让两侧高度尽量均衡。 */
-function splitBySide(measured: MeasuredBone[]): {
-  top: MeasuredBone[];
-  bottom: MeasuredBone[];
-} {
-  const top: MeasuredBone[] = [];
-  const bottom: MeasuredBone[] = [];
-  let topHeight = 0;
-  let bottomHeight = 0;
-
-  [...measured]
-    .sort((a, b) => b.bone.value - a.bone.value)
-    .forEach(item => {
-      if (topHeight <= bottomHeight) {
-        top.push(item);
-        topHeight += item.height;
-      } else {
-        bottom.push(item);
-        bottomHeight += item.height;
-      }
-    });
-
-  return { top, bottom };
+/** 主骨在画布上的四个固定槽位。 */
+interface SlotDef {
+  key: FixedBoneLabel;
+  side: 'top' | 'bottom';
+  flow: 'head' | 'tail';
 }
 
 /**
- * 把一侧的骨骼沿主干向外依次排开。
+ * 固定槽位。
  *
- * 同一侧内按占用高度升序排列：占用小的贴近主干（骨骼短），占用大的排在外侧
- * （骨骼长），于是数据上更重要的分支同时获得更长的骨骼和更大的展开空间。
- *
- * 这里先按「一人一段、互不重叠」排出垂直带，再由 `shareHeights` 把能共用的
- * 骨骼并到一起。带子只是最保守的初始解。
+ * 位置与参考图一致：人、法在鱼头一侧，环、物在鱼尾一侧，上下各两根。
+ * 槽位与分类绑定，数据多少都不会改变某根主骨画在哪，排布因此是确定的。
  */
-function positionSide(measured: MeasuredBone[]): PositionedBone[] {
-  const ordered = [...measured].sort((a, b) => a.height - b.height);
+const SLOTS: SlotDef[] = [
+  { key: '人', side: 'top', flow: 'head' },
+  { key: '环', side: 'top', flow: 'tail' },
+  { key: '物', side: 'bottom', flow: 'tail' },
+  { key: '法', side: 'bottom', flow: 'head' },
+];
 
-  let cursor = 0;
-  return ordered.map(item => {
-    const inner = cursor;
-    cursor += item.height;
-    return { measured: item, inner, outer: cursor };
-  });
+/** 问题气泡。 */
+interface EffectBubble {
+  box: LaidOutBox;
+  lines: LaidOutText[];
+  /** 气泡底部指向鱼头的尾巴。 */
+  tail: string;
 }
 
-/** 一根骨骼里所有行向左伸得最远的距离（含引线与数值）。 */
-function rowsReach(item: PositionedBone): number {
-  return item.measured.rows.reduce((max, row) => Math.max(max, row.reach), 0);
+/** 一次完整布局的产出。 */
+interface LayoutAttempt {
+  layout: Omit<FishboneLayout, 'droppedRows'>;
+  /** 因空间不足被丢弃的行数。 */
+  dropped: number;
 }
 
-/**
- * 把同一侧里「挤得下」的骨骼并到同一段高度上。
- *
- * 每根骨骼的行动辄两三百像素宽（引线 + 标签 + 数值），同一侧相邻两根如果高度
- * 区间重叠，右边那根的文字就会盖住左边那根的行。但横向间隔够大时两者互不
- * 干涉，这时它们**可以共用同一段高度** —— 这才是鱼骨图常见的画法：同一侧的
- * 骨头各占一段主轴，原因都贴着主干往上排。按占用高度依次错开只是没办法时
- * 的退让，会让外侧骨骼在内侧骨骼占的那段高度里空一大块。
- *
- * 共用要同时满足两个条件，任一不满足就退回错开：
- * 1. 横向间隔容得下右侧骨骼整行的宽度（`rowsReach`）；
- * 2. 自己的行数不多于右侧骨骼，否则多出来的行会顶进右侧骨骼标签所在的外端。
- *
- * @param gap 同一侧相邻两根骨骼的锚点间距。
- */
-function shareHeights(side: PositionedBone[], gap: number): PositionedBone[] {
-  const bases: number[] = [];
-
-  return side.map((item, index) => {
-    const rowCount = item.measured.rows.length;
-    let base = 0;
-
-    side.slice(0, index).forEach((other, otherIndex) => {
-      const shareable =
-        gap >= rowsReach(other) &&
-        rowCount <= other.measured.rows.length;
-      if (!shareable) {
-        // 让不开就退到它后面，等价于原来的分带行为。
-        base = Math.max(base, bases[otherIndex] + other.measured.height);
-      }
-    });
-
-    bases[index] = base;
-    return {
-      ...item,
-      inner: base,
-      outer: base + item.measured.height,
-    };
-  });
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
-/** 一侧骨骼占用的总高度。 */
-function sideExtent(side: PositionedBone[]): number {
-  return side.reduce((max, item) => Math.max(max, item.outer), 0);
-}
-
-/**
- * 把两侧的骨骼交织成「上、下、上、下」的一条序列。
- *
- * 两侧各自沿主干铺开的话，上下的第 k 根骨骼会落在同一个横坐标上，整幅图
- * 变成左右对称的镜像梳子，既不好看也拉不开层次。交织之后每根骨骼独占一个
- * 横坐标，相邻两根分处主干两侧，才是鱼骨图惯常的交错排布。
- */
-function interleaveSides(
-  top: PositionedBone[],
-  bottom: PositionedBone[],
-): BoneSlot[] {
-  const slots: BoneSlot[] = [];
-  for (let index = 0; index < Math.max(top.length, bottom.length); index += 1) {
-    if (index < top.length) {
-      slots.push({ item: top[index], sign: -1 });
-    }
-    if (index < bottom.length) {
-      slots.push({ item: bottom[index], sign: 1 });
-    }
-  }
-  return slots;
-}
-
-/**
- * 反解主干长度。
- *
- * 骨骼沿主干等距分布，第 k 个槽位（从 1 数起）的锚点在
- * `xRight - (k - 0.5) * L / n`。它自锚点向左延伸 `reach` 后不得越过 `PAD`，
- * 每个槽位给出一个 L 的上界，取最小值即为可行解。无解（或主干短到不可用）
- * 时返回 null。
- */
-function solveSpineLength(
-  slots: BoneSlot[],
-  rowHeight: number,
-  xRight: number,
-): number | null {
-  let limit = xRight - PAD;
-  const count = slots.length;
-
-  slots.forEach((slot, index) => {
-    const k = index + 1;
-    const slack = xRight - PAD - boneReach(slot.item, rowHeight);
-    // L <= count * slack / (k - 0.5)
-    limit = Math.min(limit, (count * slack) / (k - 0.5));
-  });
-
-  if (!Number.isFinite(limit) || limit < MIN_SPINE_LENGTH) {
+/** 计算主干、鱼头与鱼尾的几何。 */
+function computeGeometry(
+  width: number,
+  height: number,
+  dir: 1 | -1,
+): Geometry | null {
+  if (width < PAD * 3 || height < PAD * 2) {
     return null;
   }
-  return limit;
-}
 
-/** 大骨线宽按数值在基准线宽的 0.55～1.45 倍之间线性映射。 */
-function boneStrokeWidth(
-  value: number,
-  maxValue: number,
-  input: FishboneLayoutInput,
-): number {
-  const ratio = maxValue > 0 ? Math.max(0, Math.min(1, value / maxValue)) : 1;
-  return (
-    input.baseThickness *
-    (THINNEST_RATIO + (THICKEST_RATIO - THINNEST_RATIO) * ratio)
+  const fishHalf = clamp(
+    Math.min(height * FISH_HALF_RATIO, width * 0.1),
+    FISH_HALF_MIN,
+    FISH_HALF_MAX,
   );
-}
+  const headLen = Math.min(fishHalf * HEAD_LEN_RATIO, width * 0.2);
+  const tailLen = Math.min(fishHalf * TAIL_LEN_RATIO, width * 0.17);
 
-/** 生成一根骨骼及其所有行的最终坐标。 */
-function layoutBone(
-  slot: BoneSlot,
-  slotIndex: number,
-  slotCount: number,
-  geometry: BoneGeometry,
-): LaidOutBone {
-  const { context, spineY, xRight, spineLength } = geometry;
-  const { input, maxBoneValue, fontSize, boneFontSize, rowHeight } = context;
-  const { sign } = slot;
-  const { measured, inner, outer } = slot.item;
-
-  const anchorX = xRight - ((slotIndex + 0.5) * spineLength) / slotCount;
-  const tipY = spineY + sign * outer;
-  const tipX = anchorX - outer / BONE_ANGLE_TAN;
-
-  const rows: LaidOutRow[] = measured.rows.map((row, rowIndex) => {
-    const distance = inner + (rowIndex + 0.5) * rowHeight;
-    const leaderY = spineY + sign * distance;
-    const leaderX = anchorX - distance / BONE_ANGLE_TAN;
-    const leaderEnd = leaderX - row.leaderLength;
-    const hasValue = row.displayValue !== null;
-
-    return {
-      key: row.row.key,
-      label: row.row.label,
-      depth: row.row.depth,
-      value: row.row.value,
-      path: row.row.path,
-      leader: {
-        x1: leaderX,
-        y1: leaderY,
-        x2: leaderEnd,
-        y2: leaderY,
-        width: LEADER_WIDTH,
-      },
-      labelText: {
-        x: hasValue ? leaderEnd - row.valueWidth - VALUE_GAP : leaderEnd,
-        y: leaderY,
-        text: row.displayLabel,
-        fontSize,
-        anchor: 'end',
-      },
-      valueText: hasValue
-        ? {
-            x: leaderEnd,
-            y: leaderY,
-            text: row.displayValue as string,
-            fontSize,
-            anchor: 'end',
-          }
-        : null,
-    };
-  });
-
-  const strokeWidth = boneStrokeWidth(
-    measured.bone.value,
-    maxBoneValue,
-    input,
-  );
+  const headTipX = dir > 0 ? width - PAD : PAD;
+  const headBaseX = headTipX - dir * headLen;
+  const tailTipX = dir > 0 ? PAD : width - PAD;
+  const tailBaseX = tailTipX + dir * tailLen;
 
   return {
-    key: measured.bone.key,
-    label: measured.bone.label,
-    value: measured.bone.value,
-    formattedValue: input.formatValue(measured.bone.value),
-    strokeWidth,
-    color: input.boneColors[measured.bone.key] ?? DEFAULT_BONE_COLOR,
-    bone: { x1: anchorX, y1: spineY, x2: tipX, y2: tipY, width: strokeWidth },
-    labelText: {
-      x: tipX - BONE_LABEL_GAP,
-      y: spineY + sign * (outer - measured.labelHeight / 2),
-      text: measured.displayLabel,
-      fontSize: boneFontSize,
-      anchor: 'end',
-    },
-    rows,
+    dir,
+    spineY: height / 2,
+    tailTipX,
+    tailBaseX,
+    headTipX,
+    headBaseX,
+    fishHalf,
+    headLen,
+    tailLen,
+  };
+}
+
+/** 鱼头轮廓：圆润的头部曲线，外端收成一个带凹口的嘴。 */
+function fishHeadPath(g: Geometry): string {
+  const { dir, spineY, headBaseX, headTipX, headLen, fishHalf } = g;
+  const c1 = headBaseX + dir * headLen * 0.42;
+  const c2 = headBaseX + dir * headLen * 0.82;
+  const upperLipY = spineY - fishHalf * 0.17;
+  const lowerLipY = spineY + fishHalf * 0.17;
+  // 嘴角比嘴尖略微收进头部，上下唇之间形成向内凹的缺口。
+  const mouthX = headTipX - dir * headLen * 0.12;
+  return [
+    `M ${headBaseX} ${spineY - fishHalf}`,
+    `C ${c1} ${spineY - fishHalf} ${c2} ${spineY - fishHalf * 0.58} ${headTipX} ${upperLipY}`,
+    `C ${headTipX - dir * headLen * 0.07} ${upperLipY} ${mouthX + dir * headLen * 0.03} ${spineY - fishHalf * 0.05} ${mouthX} ${spineY}`,
+    `C ${mouthX + dir * headLen * 0.03} ${spineY + fishHalf * 0.05} ${headTipX - dir * headLen * 0.07} ${lowerLipY} ${headTipX} ${lowerLipY}`,
+    `C ${c2} ${spineY + fishHalf * 0.58} ${c1} ${spineY + fishHalf} ${headBaseX} ${spineY + fishHalf}`,
+    'Z',
+  ].join(' ');
+}
+
+/** 鱼鳃：头部后方一道向嘴侧弯的弧线。 */
+function fishGillPath(g: Geometry): string {
+  const { dir, spineY, headBaseX, headLen, fishHalf } = g;
+  const x1 = headBaseX + dir * headLen * 0.3;
+  const x2 = headBaseX + dir * headLen * 0.38;
+  return `M ${x1} ${spineY - fishHalf * 0.58} C ${x2} ${spineY - fishHalf * 0.22} ${x2} ${spineY + fishHalf * 0.22} ${x1} ${spineY + fishHalf * 0.58}`;
+}
+
+/**
+ * 鱼尾轮廓：从主干末端一段窄颈向外张开的弧状叉尾。
+ *
+ * 窄颈与主干线宽接近，尾鳍再从颈部左右张开，避免尾鳍和主干之间出现生硬的
+ * 直角接缝；两个叶瓣用三次贝塞尔曲线收出圆弧和中间的凹口。
+ */
+function fishTailPath(g: Geometry): string {
+  const { dir, spineY, tailTipX, tailLen, fishHalf } = g;
+  const base = tailTipX + dir * tailLen;
+  const notch = tailTipX + dir * tailLen * 0.42;
+  // 尾根高度跟着主干线宽走，粗细变化时尾鳍始终与鱼身自然衔接。
+  const neck = SPINE_WIDTH * 0.6;
+  return [
+    `M ${base} ${spineY - neck}`,
+    `C ${base - dir * tailLen * 0.2} ${spineY - fishHalf * 0.55} ${tailTipX + dir * tailLen * 0.1} ${spineY - fishHalf * 1.05} ${tailTipX} ${spineY - fishHalf * 0.95}`,
+    `C ${tailTipX + dir * tailLen * 0.28} ${spineY - fishHalf * 0.6} ${tailTipX + dir * tailLen * 0.3} ${spineY - fishHalf * 0.18} ${notch} ${spineY}`,
+    `C ${tailTipX + dir * tailLen * 0.3} ${spineY + fishHalf * 0.18} ${tailTipX + dir * tailLen * 0.28} ${spineY + fishHalf * 0.6} ${tailTipX} ${spineY + fishHalf * 0.95}`,
+    `C ${tailTipX + dir * tailLen * 0.1} ${spineY + fishHalf * 1.05} ${base - dir * tailLen * 0.2} ${spineY + fishHalf * 0.55} ${base} ${spineY + neck}`,
+    'Z',
+  ].join(' ');
+}
+
+/** 鱼眼位置。 */
+function fishEye(g: Geometry): LaidOutCircle {
+  return {
+    cx: g.headBaseX + g.dir * g.headLen * 0.5,
+    cy: g.spineY - g.fishHalf * 0.32,
+    r: Math.max(2, g.fishHalf * 0.13),
   };
 }
 
 /**
- * 鱼头文字外面那圈圆角矩形：把要分析的问题框起来，让它在整幅图里最显眼。
+ * 问题气泡：停在鱼头上方，深色底白字，底部有一个指向鱼头的尖角。
  *
- * 文字在鱼头朝右时左对齐、镜像后右对齐，两种都要量出完整宽度，框才不会偏
- * 到文字的一边。文字本身是垂直居中于主干的，框跟着它的中线走。
+ * 气泡不再占用整段竖直区域，而是像对话框一样排在鱼头上方；同一高度的
+ * 原因行可以排到气泡左侧，因此气泡放大、下移也不会挤掉原因。
  */
-function headBoxOf(text: LaidOutText | null): LaidOutBox | null {
+function buildEffectBubble(
+  effectName: string,
+  fontSize: number,
+  width: number,
+  g: Geometry,
+): EffectBubble | null {
+  const text = effectName.trim();
   if (!text) {
     return null;
   }
-  const textWidth = estimateTextWidth(text.text, text.fontSize);
-  const height = text.fontSize + HEAD_BOX_PAD_Y * 2;
+
+  const effectFontSize = Math.max(
+    fontSize + EFFECT_FONT_BONUS,
+    EFFECT_MIN_FONT_SIZE,
+  );
+  const lineHeight = effectFontSize * EFFECT_LINE_RATIO;
+  // 气泡底部固定在鱼头上方，尾巴再从底部伸向鱼头。
+  const bubbleBottom = g.spineY - g.fishHalf - EFFECT_BOTTOM_GAP;
+  const maxHeight = bubbleBottom - PAD;
+  const maxLines = Math.min(
+    EFFECT_MAX_LINES,
+    Math.floor((maxHeight - EFFECT_PAD_Y * 2) / lineHeight),
+  );
+  if (maxLines < 1) {
+    return null;
+  }
+
+  const maxWidth = Math.min(
+    EFFECT_MAX_WIDTH,
+    Math.max(EFFECT_MIN_WIDTH, width * EFFECT_WIDTH_RATIO),
+  );
+  const lines = wrapText(
+    text,
+    effectFontSize,
+    maxWidth - EFFECT_PAD_X * 2,
+    maxLines,
+  );
+  if (!lines.length) {
+    return null;
+  }
+
+  const textWidth = Math.max(
+    ...lines.map(line => estimateTextWidth(line, effectFontSize)),
+  );
+  const boxWidth = Math.min(maxWidth, textWidth + EFFECT_PAD_X * 2);
+  const boxHeight = lines.length * lineHeight + EFFECT_PAD_Y * 2;
+  const y = bubbleBottom - boxHeight;
+  if (y < PAD) {
+    return null;
+  }
+
+  const x = g.dir > 0 ? width - PAD - boxWidth : PAD;
+  // 尾巴放在靠鱼头的一侧，向下指向鱼头。
+  const pointerX = g.dir > 0 ? x + boxWidth - 28 : x + 28;
+  const tail = `M ${pointerX - 10} ${bubbleBottom - 1} L ${pointerX + 10} ${bubbleBottom - 1} L ${pointerX} ${bubbleBottom + EFFECT_TAIL_HEIGHT} Z`;
 
   return {
-    x: (text.anchor === 'end' ? text.x - textWidth : text.x) - HEAD_BOX_PAD_X,
-    y: text.y - height / 2,
-    width: textWidth + HEAD_BOX_PAD_X * 2,
-    height,
-    radius: HEAD_BOX_RADIUS,
-  };
-}
-
-/** 主干末端的箭头。方向取自主干朝向，因此镜像后无需再单独判断。 */
-function withArrow(
-  layout: Omit<FishboneLayout, 'droppedRows'>,
-): Omit<FishboneLayout, 'droppedRows'> {
-  const { x1, x2, y1 } = layout.spine;
-  const direction = Math.sign(x2 - x1) || 1;
-  const tipX = x2 + direction * ARROW_LENGTH;
-  return {
-    ...layout,
-    arrow: `M ${x2} ${y1 - ARROW_HALF} L ${tipX} ${y1} L ${x2} ${
-      y1 + ARROW_HALF
-    } Z`,
-  };
-}
-
-/** 布局里每一处横坐标的搬运规则。 */
-interface XMap {
-  /** 线段端点的映射。 */
-  edge: (x: number) => number;
-  /** 矩形左边缘的映射：镜像时矩形的右边缘才是新的左边缘。 */
-  boxLeft: (box: LaidOutBox) => number;
-  /** 文字的对齐方向是否跟着翻。 */
-  flipAnchors: boolean;
-}
-
-/**
- * 按同一套规则重算布局里所有的横坐标，其余部分原样保留。
- *
- * 镜像与居中都是这套「搬坐标」，只是规则不同，因此共用一份遍历。箭头的路径
- * 是坐标拼出来的字符串，搬不动，这里一律清空，由调用方最后用 `withArrow`
- * 依搬完的主干重算。
- */
-function mapLayoutX(
-  layout: Omit<FishboneLayout, 'droppedRows'>,
-  xmap: XMap,
-): Omit<FishboneLayout, 'droppedRows'> {
-  const flipAnchor = (anchor: LaidOutText['anchor']): LaidOutText['anchor'] =>
-    anchor === 'start' ? 'end' : anchor === 'end' ? 'start' : 'middle';
-  const mapText = (text: LaidOutText): LaidOutText => ({
-    ...text,
-    x: xmap.edge(text.x),
-    anchor: xmap.flipAnchors ? flipAnchor(text.anchor) : text.anchor,
-  });
-  const mapLine = <T extends { x1: number; x2: number }>(line: T): T => ({
-    ...line,
-    x1: xmap.edge(line.x1),
-    x2: xmap.edge(line.x2),
-  });
-
-  return {
-    spine: mapLine(layout.spine),
-    arrow: '',
-    headText: layout.headText ? mapText(layout.headText) : null,
-    headBox: layout.headBox
-      ? { ...layout.headBox, x: xmap.boxLeft(layout.headBox) }
-      : null,
-    bones: layout.bones.map(bone => ({
-      ...bone,
-      bone: mapLine(bone.bone),
-      labelText: mapText(bone.labelText),
-      rows: bone.rows.map(row => ({
-        ...row,
-        leader: mapLine(row.leader),
-        labelText: mapText(row.labelText),
-        valueText: row.valueText ? mapText(row.valueText) : null,
-      })),
+    box: {
+      x,
+      y,
+      width: boxWidth,
+      height: boxHeight,
+      radius: 10,
+    },
+    lines: lines.map((line, index) => ({
+      x: x + EFFECT_PAD_X,
+      y: y + EFFECT_PAD_Y + (index + 0.5) * lineHeight,
+      text: line,
+      fontSize: effectFontSize,
+      anchor: 'start',
     })),
+    tail,
   };
 }
 
-/**
- * 把整幅图沿垂直中轴镜像，供鱼头在左侧时使用。
- *
- * 布局本身只按「鱼头在右」推算，镜像放在最后一步，避免同一套几何写两遍。
- * 文字只翻坐标不翻内容，同时把对齐方向对调，保证文字仍然正着读。
- */
-function mirror(
-  layout: Omit<FishboneLayout, 'droppedRows'>,
-  width: number,
+/** 只有主干、鱼头鱼尾与问题气泡的退化布局。 */
+function buildSkeleton(
+  input: FishboneLayoutInput,
 ): Omit<FishboneLayout, 'droppedRows'> {
-  return mapLayoutX(layout, {
-    edge: x => width - x,
-    boxLeft: box => width - (box.x + box.width),
-    flipAnchors: true,
-  });
+  const dir: 1 | -1 = input.headPosition === 'left' ? -1 : 1;
+  const g = computeGeometry(input.width, input.height, dir);
+  if (!g) {
+    return {
+      spine: { x1: 0, y1: 0, x2: 0, y2: 0, width: SPINE_WIDTH },
+      headPath: '',
+      headEye: { cx: 0, cy: 0, r: 0 },
+      headGill: '',
+      tailPath: '',
+      effectBubble: null,
+      effectLines: [],
+      effectTail: '',
+      bones: [],
+    };
+  }
+
+  const effect = buildEffectBubble(
+    input.effectName,
+    input.baseFontSize,
+    input.width,
+    g,
+  );
+
+  return {
+    spine: {
+      x1: g.tailBaseX,
+      y1: g.spineY,
+      x2: g.headBaseX,
+      y2: g.spineY,
+      width: SPINE_WIDTH,
+    },
+    headPath: fishHeadPath(g),
+    headEye: fishEye(g),
+    headGill: fishGillPath(g),
+    tailPath: fishTailPath(g),
+    effectBubble: effect?.box ?? null,
+    effectLines: effect?.lines ?? [],
+    effectTail: effect?.tail ?? '',
+    bones: [],
+  };
+}
+
+/** 一根主骨的几何，排原因行时两侧都要用到。 */
+interface SlotGeometry {
+  slot: SlotDef;
+  source: FishboneBone | undefined;
+  label: string;
+  pillWidth: number;
+  anchorX: number;
+  run: number;
+  tipX: number;
+  tipY: number;
+  outward: -1 | 1;
+  textDir: -1 | 1;
+  /** 外侧与内侧各自允许的竖直铺开距离（距主干）。 */
+  outerMax: number;
+  innerMax: number;
+}
+
+/** 排原因行时用到的公共参数。 */
+interface RowLayoutContext {
+  width: number;
+  spineY: number;
+  dir: 1 | -1;
+  fontSize: number;
+  laneGap: number;
+  showValues: boolean;
+  formatValue: (value: number) => string;
+  /** 主骨线宽，用来把箭头尖推到主骨边缘之外。 */
+  boneThickness: number;
+  /** 问题气泡；鱼头一侧的原因行要避开它。 */
+  effect: EffectBubble | null;
+}
+
+/** 一根主骨的行分配方案。 */
+interface BoneRowPlan {
+  kept: FishboneRow[];
+  outerCount: number;
+  innerCount: number;
+  /** 两侧都排不下的行数。 */
+  dropped: number;
+}
+
+/** 按两侧容量分配原因行：外侧优先，溢出时在两侧之间尽量均分。 */
+function planBoneRows(
+  geo: SlotGeometry,
+  rowHeight: number,
+  laneGap: number,
+): BoneRowPlan {
+  const sourceRows = geo.source?.rows ?? [];
+  const outerSpan = Math.max(0, geo.outerMax - laneGap);
+  const outerSlots =
+    geo.outerMax >= laneGap ? Math.floor(outerSpan / rowHeight) + 1 : 0;
+  const innerSpan = Math.max(0, geo.innerMax - laneGap);
+  const innerSlots =
+    geo.innerMax >= laneGap ? Math.floor(innerSpan / rowHeight) + 1 : 0;
+
+  const kept = sourceRows.slice(0, outerSlots + innerSlots);
+  const dropped = sourceRows.length - kept.length;
+
+  let outerCount = kept.length;
+  let innerCount = 0;
+  if (kept.length > outerSlots) {
+    outerCount = Math.min(Math.ceil(kept.length / 2), outerSlots);
+    innerCount = Math.min(kept.length - outerCount, innerSlots);
+    const remaining = kept.length - outerCount - innerCount;
+    if (remaining > 0) {
+      outerCount += Math.min(remaining, outerSlots - outerCount);
+    }
+  }
+
+  return { kept, outerCount, innerCount, dropped };
 }
 
 /**
- * 布局里所有图元的横向范围。文字按 `anchor` 换算出实际延伸，箭头算到尖端。
+ * 排一根主骨上的原因行。
+ *
+ * 外侧放得下时全部排在外侧，保持和参考图一致的疏朗感；外侧放不下时把行
+ * 分到主骨两侧，由内侧继续承接，而不是丢掉多出来的原因。同一侧两根主骨都
+ * 用到内侧时，以两根骨的中线为界、各让出半个 `INNER_GAP`；只有一根用到内侧
+ * 时，文字可以一直用到另一根主骨旁边，避免把长原因白白截短。
  */
-function horizontalExtents(layout: Omit<FishboneLayout, 'droppedRows'>): {
-  left: number;
-  right: number;
-} {
-  let left = Math.min(layout.spine.x1, layout.spine.x2);
-  let right = Math.max(layout.spine.x1, layout.spine.x2);
+function layoutBoneRows(
+  geo: SlotGeometry,
+  other: SlotGeometry | null,
+  plan: BoneRowPlan,
+  otherUsesInner: boolean,
+  context: RowLayoutContext,
+): { rows: LaidOutRow[]; dropped: number } {
+  const {
+    width,
+    spineY,
+    dir,
+    fontSize,
+    laneGap,
+    showValues,
+    formatValue,
+    boneThickness,
+    effect,
+  } = context;
+  const rows: LaidOutRow[] = [];
+  let dropped = plan.dropped;
+  // 箭头尖退到主骨边缘之外，再留一段可见间隙。
+  const arrowGap = boneThickness / 2 + ARROW_CLEARANCE;
 
-  const extend = (node: LaidOutText | null) => {
-    if (!node) {
+  const place = (targets: FishboneRow[], isInner: boolean) => {
+    if (!targets.length) {
       return;
     }
-    const textWidth = estimateTextWidth(node.text, node.fontSize);
-    const start =
-      node.anchor === 'end'
-        ? node.x - textWidth
-        : node.anchor === 'middle'
-          ? node.x - textWidth / 2
-          : node.x;
-    left = Math.min(left, start);
-    right = Math.max(right, start + textWidth);
-  };
-  const extendBox = (box: LaidOutBox | null) => {
-    if (box) {
-      left = Math.min(left, box.x);
-      right = Math.max(right, box.x + box.width);
-    }
+    const maxDistance = isInner ? geo.innerMax : geo.outerMax;
+    const span = Math.max(0, maxDistance - laneGap);
+    const spacing = targets.length > 1 ? span / (targets.length - 1) : 0;
+    const sideDir: -1 | 1 = isInner
+      ? geo.textDir === 1
+        ? -1
+        : 1
+      : geo.textDir;
+
+    targets.forEach((row, index) => {
+      const distance = targets.length > 1 ? laneGap + index * spacing : laneGap;
+      const y = spineY + geo.outward * distance;
+      const boneX = geo.anchorX - dir * (distance / BONE_ANGLE_TAN);
+      // 箭头从主骨旁边一点开始，箭头尖朝主骨但不与主骨线重叠。
+      const arrowTipX = boneX + sideDir * arrowGap;
+      const leaderEnd = boneX + sideDir * LEADER_LENGTH;
+
+      let available: number;
+      if (isInner) {
+        // 另一根主骨在同一高度上的横坐标；它可能更短，到末端就钉住不动。
+        const otherX = other
+          ? other.anchorX -
+            dir *
+              (Math.min(distance, other.run * BONE_ANGLE_TAN) / BONE_ANGLE_TAN)
+          : boneX;
+        if (otherUsesInner) {
+          // 两根骨的内侧都用上了：在中线处分界，各留半个间隙。
+          const midpoint = (boneX + otherX) / 2;
+          const boundary =
+            midpoint + (sideDir > 0 ? -INNER_GAP / 2 : INNER_GAP / 2);
+          available = sideDir > 0 ? boundary - leaderEnd : leaderEnd - boundary;
+        } else {
+          // 对侧不排内侧行，可以一直用到对侧主骨旁边，并给胶囊留出余量。
+          const clearance = Math.max(
+            INNER_GAP,
+            (other?.pillWidth ?? 0) / 2 + 6,
+          );
+          available =
+            sideDir > 0
+              ? otherX - clearance - leaderEnd
+              : leaderEnd - (otherX + clearance);
+        }
+      } else {
+        let edgeLimit = sideDir < 0 ? PAD : width - PAD;
+        // 问题气泡停在鱼头一侧的上方；同一高度上的原因行排到气泡旁边，
+        // 而不是把整段高度让给气泡。气泡尾巴下方也按气泡宽度避让。
+        if (effect && geo.slot.flow === 'head' && geo.slot.side === 'top') {
+          const bubbleBandBottom =
+            effect.box.y + effect.box.height + EFFECT_TAIL_HEIGHT + 8;
+          if (y < bubbleBandBottom) {
+            edgeLimit =
+              sideDir > 0
+                ? effect.box.x - 8
+                : effect.box.x + effect.box.width + 8;
+          }
+        }
+        available = sideDir < 0 ? leaderEnd - edgeLimit : edgeLimit - leaderEnd;
+      }
+
+      const valueText = showValues ? formatValue(row.value) : null;
+      const valueWidth = valueText ? estimateTextWidth(valueText, fontSize) : 0;
+      const labelMax = available - (valueText ? valueWidth + VALUE_GAP : 0);
+      if (labelMax < fontSize * 1.6) {
+        dropped += 1;
+        return;
+      }
+
+      const displayLabel = truncateToWidth(row.label, fontSize, labelMax);
+      // 箭头尖落在主骨旁，尾巴朝文字一侧，表示原因指向骨骼。
+      const arrowBaseX = arrowTipX + sideDir * ARROW_LENGTH;
+      const labelOffset = valueText ? valueWidth + VALUE_GAP : 0;
+
+      rows.push({
+        key: row.key,
+        label: row.label,
+        depth: row.depth,
+        value: row.value,
+        path: row.path,
+        leader: {
+          x1: arrowTipX,
+          y1: y,
+          x2: leaderEnd,
+          y2: y,
+          width: LEADER_WIDTH,
+        },
+        arrow: `M ${arrowTipX} ${y} L ${arrowBaseX} ${y - ARROW_HALF} L ${arrowBaseX} ${y + ARROW_HALF} Z`,
+        labelText: {
+          x: leaderEnd + sideDir * labelOffset,
+          y,
+          text: displayLabel,
+          fontSize,
+          anchor: sideDir < 0 ? 'end' : 'start',
+        },
+        valueText: valueText
+          ? {
+              x: leaderEnd,
+              y,
+              text: valueText,
+              fontSize,
+              anchor: sideDir < 0 ? 'end' : 'start',
+            }
+          : null,
+      });
+    });
   };
 
-  extend(layout.headText);
-  extendBox(layout.headBox);
-  layout.bones.forEach(bone => {
-    left = Math.min(left, bone.bone.x1, bone.bone.x2);
-    right = Math.max(right, bone.bone.x1, bone.bone.x2);
-    extend(bone.labelText);
-    bone.rows.forEach(row => {
-      left = Math.min(left, row.leader.x1, row.leader.x2);
-      right = Math.max(right, row.leader.x1, row.leader.x2);
-      extend(row.labelText);
-      extend(row.valueText);
+  place(plan.kept.slice(0, plan.outerCount), false);
+  place(
+    plan.kept.slice(plan.outerCount, plan.outerCount + plan.innerCount),
+    true,
+  );
+
+  return { rows, dropped };
+}
+
+/**
+ * 在给定字号下排一次完整布局。
+ *
+ * 每根主骨占一个固定的象限：主骨沿「背离鱼头」的方向斜出，原因行优先排在
+ * 骨骼外侧；外侧排不下时继续排到内侧，行与行按固定行高展开，引线长度固定，
+ * 因此相邻行不会压在一起。两侧都排满仍放不下的行才丢弃，数量计入 `dropped`。
+ */
+function attemptLayout(
+  input: FishboneLayoutInput,
+  fontSize: number,
+): LayoutAttempt | null {
+  const { width, height, showValues, formatValue } = input;
+  const dir: 1 | -1 = input.headPosition === 'left' ? -1 : 1;
+  const g = computeGeometry(width, height, dir);
+  if (!g) {
+    return null;
+  }
+
+  const spineLen = Math.abs(g.headBaseX - g.tailBaseX);
+  if (spineLen < MIN_SPINE_LENGTH || g.spineY < PAD + fontSize * 2) {
+    return null;
+  }
+
+  const effect = buildEffectBubble(input.effectName, fontSize, width, g);
+  const boneFontSize = Math.max(fontSize + PILL_FONT_BONUS, PILL_MIN_FONT_SIZE);
+  const pillHeight = boneFontSize + PILL_PAD_Y * 2;
+  const rowHeight = fontSize * ROW_HEIGHT_RATIO;
+  const laneGap = g.fishHalf + fontSize * 0.6;
+  const boneByKey = new Map(input.bones.map(bone => [bone.key, bone]));
+  const desiredRun = (g.spineY - PAD - pillHeight / 2) / BONE_ANGLE_TAN;
+
+  // 先把四根主骨的几何都算出来：内侧排行时要用到对面那根骨的位置。
+  const geometries: SlotGeometry[] = SLOTS.map(slot => {
+    const source = boneByKey.get(slot.key);
+    const label = source?.label ?? slot.key;
+    const pillWidth = estimateTextWidth(label, boneFontSize) + PILL_PAD_X * 2;
+
+    // 锚点沿主干按比例放置；鱼头在左时比例方向自动翻转。
+    const flow = slot.flow === 'head' ? HEAD_FLOW : TAIL_FLOW;
+    const anchorX = g.tailBaseX + flow * (g.headBaseX - g.tailBaseX);
+
+    // 主骨朝背离鱼头的方向斜出，长度受画布边缘限制。
+    const roomToEdge =
+      dir > 0
+        ? anchorX - PAD - pillWidth / 2
+        : width - PAD - anchorX - pillWidth / 2;
+    const run = Math.max(0, Math.min(desiredRun, roomToEdge));
+    const tipX = anchorX - dir * run;
+    const tipY =
+      g.spineY + (slot.side === 'top' ? -1 : 1) * run * BONE_ANGLE_TAN;
+
+    // 文字朝象限外侧排：鱼尾侧的骨头把文字排在鱼尾方向，鱼头侧反之。
+    const textDir: -1 | 1 = slot.flow === 'tail' ? (dir > 0 ? -1 : 1) : dir;
+    const outward: -1 | 1 = slot.side === 'top' ? -1 : 1;
+
+    const baseMax = run * BONE_ANGLE_TAN - pillHeight / 2 - fontSize * 0.9;
+    let outerMax = baseMax;
+
+    // 文字排在鱼尾一侧时，越靠近骨骼末端，留给文字的横向空间越小。把铺开
+    // 范围收到文字还放得下的位置，避免为了填满骨骼把末端几行挤到没有宽度。
+    if (slot.flow === 'tail') {
+      const sourceRows = source?.rows ?? [];
+      const maxValueWidth = showValues
+        ? sourceRows.reduce(
+            (max, row) =>
+              Math.max(
+                max,
+                estimateTextWidth(formatValue(row.value), fontSize),
+              ),
+            0,
+          )
+        : 0;
+      // 从锚点朝鱼尾方向的可用横向空间，鱼头朝左时左右互换。
+      const tailRoom = dir > 0 ? anchorX - PAD : width - PAD - anchorX;
+      const usable =
+        tailRoom -
+        LEADER_LENGTH -
+        fontSize * 1.6 -
+        (maxValueWidth ? maxValueWidth + VALUE_GAP : 0);
+      outerMax = Math.min(outerMax, usable * BONE_ANGLE_TAN);
+    }
+
+    return {
+      slot,
+      source,
+      label,
+      pillWidth,
+      anchorX,
+      run,
+      tipX,
+      tipY,
+      outward,
+      textDir,
+      outerMax,
+      innerMax: baseMax,
+    };
+  });
+
+  // 同一侧的两根主骨互为内侧的边界参照。
+  const bySide: Record<'top' | 'bottom', SlotGeometry[]> = {
+    top: [],
+    bottom: [],
+  };
+  geometries.forEach(geo => bySide[geo.slot.side].push(geo));
+
+  // 先给每根主骨分配行数，内侧排版时才能知道对面那根骨是否也占用内侧。
+  const plans = new Map(
+    geometries.map(geo => [
+      geo.slot.key,
+      planBoneRows(geo, rowHeight, laneGap),
+    ]),
+  );
+
+  const laidOutBones: LaidOutBone[] = [];
+  let dropped = 0;
+
+  geometries.forEach(geo => {
+    const other =
+      bySide[geo.slot.side].find(item => item.slot.key !== geo.slot.key) ??
+      null;
+    const plan = plans.get(geo.slot.key);
+    if (!plan) {
+      return;
+    }
+    const otherUsesInner = other
+      ? (plans.get(other.slot.key)?.innerCount ?? 0) > 0
+      : false;
+    const { rows, dropped: rowDropped } = layoutBoneRows(
+      geo,
+      other,
+      plan,
+      otherUsesInner,
+      {
+        width,
+        spineY: g.spineY,
+        dir,
+        fontSize,
+        laneGap,
+        showValues,
+        formatValue,
+        boneThickness: input.baseThickness,
+        effect,
+      },
+    );
+    dropped += rowDropped;
+
+    // 大骨汇入主干处的箭头：箭头尖朝主干，并与主干留出间隙。
+    const thickness = input.baseThickness;
+    const dx = geo.tipX - geo.anchorX;
+    const dy = geo.tipY - g.spineY;
+    const boneLength = Math.hypot(dx, dy);
+    const unitX = boneLength > 0 ? dx / boneLength : 0;
+    const unitY = boneLength > 0 ? dy / boneLength : 0;
+    const arrowGap = SPINE_WIDTH / 2 + MAIN_ARROW_GAP;
+    const arrowLength = thickness * 1.6 + 4;
+    const arrowHalf = thickness * 0.9 + 2;
+    const arrowTipX = geo.anchorX + unitX * arrowGap;
+    const arrowTipY = g.spineY + unitY * arrowGap;
+    const arrowBaseX = geo.anchorX + unitX * (arrowGap + arrowLength);
+    const arrowBaseY = g.spineY + unitY * (arrowGap + arrowLength);
+    const perpX = -unitY;
+    const perpY = unitX;
+
+    laidOutBones.push({
+      key: geo.slot.key,
+      label: geo.label,
+      value: geo.source?.value ?? 0,
+      formattedValue: formatValue(geo.source?.value ?? 0),
+      bone: {
+        x1: arrowBaseX,
+        y1: arrowBaseY,
+        x2: geo.tipX,
+        y2: geo.tipY,
+        width: thickness,
+      },
+      baseArrow:
+        boneLength > 0
+          ? `M ${arrowTipX} ${arrowTipY} L ${arrowBaseX + perpX * arrowHalf} ${arrowBaseY + perpY * arrowHalf} L ${arrowBaseX - perpX * arrowHalf} ${arrowBaseY - perpY * arrowHalf} Z`
+          : '',
+      pill: {
+        box: {
+          x: geo.tipX - geo.pillWidth / 2,
+          y: geo.tipY - pillHeight / 2,
+          width: geo.pillWidth,
+          height: pillHeight,
+          radius: PILL_RADIUS,
+        },
+        text: {
+          x: geo.tipX,
+          y: geo.tipY,
+          text: truncateToWidth(
+            geo.label,
+            boneFontSize,
+            geo.pillWidth - PILL_PAD_X * 2,
+          ),
+          fontSize: boneFontSize,
+          anchor: 'middle',
+        },
+      },
+      rows,
     });
   });
 
-  // 箭头尖比主干末端还突出一截。
-  const direction = Math.sign(layout.spine.x2 - layout.spine.x1) || 1;
-  right = Math.max(right, layout.spine.x2 + direction * ARROW_LENGTH);
-
-  return { left, right };
-}
-
-/**
- * 把整幅图水平居中。
- *
- * 骨骼间距按比例收紧之后，主轴不再铺满画布，剩下的空白会全堆在鱼头对面的
- * 那一侧（鱼头朝右就全在左边），看上去整条鱼贴着一边。这里按所有图元的实际
- * 横向范围整体平移，让左右留白相等。
- */
-function centerHorizontally(
-  layout: Omit<FishboneLayout, 'droppedRows'>,
-  width: number,
-): Omit<FishboneLayout, 'droppedRows'> {
-  const { left, right } = horizontalExtents(layout);
-  const shift = (width - (right - left)) / 2 - left;
-
-  return mapLayoutX(layout, {
-    edge: x => x + shift,
-    boxLeft: box => box.x + shift,
-    flipAnchors: false,
-  });
-}
-
-/** 无数据或画布过小时的退化布局：只有主干与鱼头。 */
-function emptyLayout(
-  input: FishboneLayoutInput,
-  droppedRows: number,
-): FishboneLayout {
-  const { width, height, effectName, headPosition } = input;
-  const spineY = height / 2;
-  const fontSize = input.baseFontSize + HEAD_FONT_BONUS;
-  const headText = effectName
-    ? truncateToWidth(effectName, fontSize, width * HEAD_WIDTH_BUDGET)
-    : '';
-  const headWidth = headText ? estimateTextWidth(headText, fontSize) : 0;
-  // 外框右边那圈内边距也要算进去，否则框会越过画布右侧的留白。
-  const headBlock = headText
-    ? headWidth + HEAD_GAP + ARROW_LENGTH + HEAD_BOX_PAD_X
-    : 0;
-  const xRight = Math.max(PAD, width - PAD - headBlock);
-  const xLeft = Math.max(0, Math.min(PAD, xRight - MIN_SPINE_LENGTH));
-
-  const headNode: LaidOutText | null = headText
-    ? {
-        x: xRight + ARROW_LENGTH + HEAD_GAP,
-        y: spineY,
-        text: headText,
-        fontSize,
-        anchor: 'start',
-      }
-    : null;
-
-  const layout: Omit<FishboneLayout, 'droppedRows'> = {
-    spine: { x1: xLeft, y1: spineY, x2: xRight, y2: spineY, width: SPINE_WIDTH },
-    arrow: '',
-    headText: headNode,
-    headBox: headBoxOf(headNode),
-    bones: [],
-  };
-
-  const oriented = headPosition === 'left' ? mirror(layout, width) : layout;
   return {
-    ...withArrow(centerHorizontally(oriented, width)),
-    droppedRows,
-  };
-}
-
-/**
- * 在给定字号下尝试一次完整布局。返回 null 表示这个字号放不下，
- * 调用方需要缩小字号或减少数据。
- */
-function attemptLayout(
-  bones: FishboneBone[],
-  fontSize: number,
-  input: FishboneLayoutInput,
-): Omit<FishboneLayout, 'droppedRows'> | null {
-  const { width, height, effectName, showValues, headPosition } = input;
-  const boneFontSize = fontSize + 1;
-
-  // 鱼头先量出来，它的宽度决定主干右端能伸到哪里。
-  const headFontSize = fontSize + HEAD_FONT_BONUS;
-  const headText = truncateToWidth(
-    effectName,
-    headFontSize,
-    width * HEAD_WIDTH_BUDGET,
-  );
-  const headWidth = headText ? estimateTextWidth(headText, headFontSize) : 0;
-  // 外框右边那圈内边距也要算进去，否则框会越过画布右侧的留白。
-  const headBlock = headText
-    ? headWidth + HEAD_GAP + ARROW_LENGTH + HEAD_BOX_PAD_X
-    : 0;
-
-  const xRight = width - PAD - headBlock;
-  if (xRight - PAD < MIN_SPINE_LENGTH) {
-    return null;
-  }
-
-  const labelBudget = (xRight - PAD) * LABEL_WIDTH_BUDGET;
-
-  const measured = bones.map(bone =>
-    measureBone(bone, {
-      fontSize,
-      boneFontSize,
-      labelBudget,
-      showValues,
-      formatValue: input.formatValue,
-    }),
-  );
-
-  const { top, bottom } = splitBySide(measured);
-  const spineY = height / 2;
-  const availableHeight = spineY - PAD;
-  if (availableHeight <= 0) {
-    return null;
-  }
-
-  const rowHeight = rowHeightOf(fontSize);
-  // 求主干长度要用最保守的分带解：带子越靠外，骨骼的占用越大，解出来的
-  // 主干越短。先按它定长度，再在固定长度下把能共用的骨骼并起来。
-  const bandTop = positionSide(top);
-  const bandBottom = positionSide(bottom);
-  const bandSlots = interleaveSides(bandTop, bandBottom);
-  const maxSpineLength = solveSpineLength(bandSlots, rowHeight, xRight);
-  if (maxSpineLength === null) {
-    return null;
-  }
-  // 间距按比例收紧。解出来的长度是「放得下」的上界，缩短只会让锚点右移，
-  // 因此收紧后每根骨骼的引线与文字依然落在画布内。
-  const spineLength = maxSpineLength * SPINE_SPACING_RATIO;
-  const xLeft = xRight - spineLength;
-
-  // 同一侧相邻两根的锚点间距：槽位等距分布，隔一个槽位就是同一侧。
-  const sameSideGap = (2 * spineLength) / bandSlots.length;
-  const positionedTop = shareHeights(bandTop, sameSideGap);
-  const positionedBottom = shareHeights(bandBottom, sameSideGap);
-  if (
-    Math.max(sideExtent(positionedTop), sideExtent(positionedBottom)) >
-    availableHeight
-  ) {
-    return null;
-  }
-
-  const slots = interleaveSides(positionedTop, positionedBottom);
-  const maxBoneValue = bones.reduce((max, bone) => Math.max(max, bone.value), 0);
-
-  const context: BoneRenderContext = {
-    input,
-    maxBoneValue,
-    fontSize,
-    boneFontSize,
-    rowHeight,
-  };
-
-  const laidOutBones: LaidOutBone[] = slots.map((slot, index) =>
-    layoutBone(slot, index, slots.length, {
-      context,
-      spineY,
-      xRight,
-      spineLength,
-    }),
-  );
-
-  const headNode: LaidOutText | null = headText
-    ? {
-        x: xRight + ARROW_LENGTH + HEAD_GAP,
-        y: spineY,
-        text: headText,
-        fontSize: headFontSize,
-        anchor: 'start',
-      }
-    : null;
-
-  const layout: Omit<FishboneLayout, 'droppedRows'> = {
-    spine: {
-      x1: xLeft,
-      y1: spineY,
-      x2: xRight,
-      y2: spineY,
-      width: SPINE_WIDTH,
+    layout: {
+      spine: {
+        x1: g.tailBaseX,
+        y1: g.spineY,
+        x2: g.headBaseX,
+        y2: g.spineY,
+        width: SPINE_WIDTH,
+      },
+      headPath: fishHeadPath(g),
+      headEye: fishEye(g),
+      headGill: fishGillPath(g),
+      tailPath: fishTailPath(g),
+      effectBubble: effect?.box ?? null,
+      effectLines: effect?.lines ?? [],
+      effectTail: effect?.tail ?? '',
+      bones: laidOutBones,
     },
-    arrow: '',
-    headText: headNode,
-    headBox: headBoxOf(headNode),
-    bones: laidOutBones,
+    dropped,
   };
-
-  const oriented = headPosition === 'left' ? mirror(layout, width) : layout;
-  return withArrow(centerHorizontally(oriented, width));
-}
-
-/** 大骨过多时的兜底：只保留数值最高的一批，直到能放下为止。 */
-function keepTopBones(
-  bones: FishboneBone[],
-  input: FishboneLayoutInput,
-): FishboneBone[] {
-  const sorted = [...bones].sort((a, b) => b.value - a.value);
-  for (let count = sorted.length; count > 0; count -= 1) {
-    const kept = sorted.slice(0, count);
-    if (attemptLayout(kept, MIN_FONT_SIZE, input)) {
-      return kept;
-    }
-  }
-  return [];
-}
-
-/**
- * 二分找出此刻还能画下的最大行数。
- *
- * 保留的行按数值全局降序选取，因此被丢掉的永远是次要原因。返回 null 表示
- * 一行不留也放不下，需要调用方继续放宽条件。
- */
-function fitRowBudget(
-  bones: FishboneBone[],
-  totalRows: number,
-  input: FishboneLayoutInput,
-): number | null {
-  if (!attemptLayout(keepTopRows(bones, 0), MIN_FONT_SIZE, input)) {
-    return null;
-  }
-  let low = 0;
-  let high = totalRows;
-  while (low < high) {
-    // 向上取整，保证在 low < high 时 mid > low，循环必然收敛。
-    const mid = Math.ceil((low + high) / 2);
-    const attempt = attemptLayout(keepTopRows(bones, mid), MIN_FONT_SIZE, input);
-    if (attempt) {
-      low = mid;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return low;
 }
 
 /**
  * 把鱼骨数据排布到给定画布上。
  *
- * 布局分四步：
- * 1. **分侧** —— 按数值从大到小依次把大骨分给当前更空的一侧，让上下两侧
- *    的高度尽量接近，避免一侧很挤、另一侧很空。
- * 2. **分带** —— 同一侧内，占用高度小的骨骼排在靠近主干的位置，占用大的排
- *    在外侧。同一侧各骨骼的垂直带互不重叠，因此行与行之间绝不会压在一起。
- * 3. **交错** —— 把两侧的骨骼按「上、下、上、下」交织成一条序列，每根骨骼
- *    独占主轴上的一段，形成上下交错的鱼骨，而不是左右对称的镜像。
- * 4. **求主干长度** —— 主干越长骨骼越舒展，但每根骨骼向左延伸的距离是确定
- *    的，于是可以反解出主干最多能有多长而不让文字越出画布。
- *
- * 空间不足时优先缩字号，缩到下限仍不够才丢弃数值最低的行，丢弃数量放在
- * `droppedRows` 里供渲染层提示。
+ * 布局把四根主骨固定在四个象限里：每根主骨的位置、角度与问题气泡的位置都
+ * 不随数据变化，只有原因行的多少会占用不同的行数。空间不足时先缩小字号，
+ * 缩到下限仍放不下才丢弃每根主骨末尾的次要原因，丢弃数量放在 `droppedRows`
+ * 里供渲染层提示。
  */
 export default function computeFishboneLayout(
   input: FishboneLayoutInput,
 ): FishboneLayout {
-  const { bones, baseFontSize } = input;
-  const totalRows = bones.reduce((sum, bone) => sum + bone.rows.length, 0);
+  const totalRows = input.bones.reduce(
+    (sum, bone) => sum + bone.rows.length,
+    0,
+  );
 
-  if (!bones.length) {
-    return emptyLayout(input, 0);
+  if (!totalRows) {
+    return { ...buildSkeleton(input), bones: [], droppedRows: 0 };
   }
 
-  // 阶段一：优先缩字号，尽量把数据完整画下。
+  let best: LayoutAttempt | null = null;
   for (let step = 0; step < MAX_FONT_STEPS; step += 1) {
-    const fontSize = baseFontSize - step;
+    const fontSize = input.baseFontSize - step;
     if (fontSize < MIN_FONT_SIZE) {
       break;
     }
-    const attempt = attemptLayout(bones, fontSize, input);
-    if (attempt) {
-      return { ...attempt, droppedRows: 0 };
+    const attempt = attemptLayout(input, fontSize);
+    if (!attempt) {
+      continue;
+    }
+    // 字号越小通常越能放下，但两侧分配与宽度上限的联动偶尔会让更小的
+    // 字号反而丢得更多；这里始终保留丢弃最少的那次，同数时保留字号更大的。
+    if (!best || attempt.dropped < best.dropped) {
+      best = attempt;
+    }
+    if (attempt.dropped === 0) {
+      break;
     }
   }
 
-  // 阶段二：字号已到底，改为丢弃数值最低的行。
-  if (totalRows > 0) {
-    const budget = fitRowBudget(bones, totalRows, input);
-    if (budget !== null) {
-      const attempt = attemptLayout(
-        keepTopRows(bones, budget),
-        MIN_FONT_SIZE,
-        input,
-      );
-      if (attempt) {
-        return { ...attempt, droppedRows: totalRows - budget };
-      }
-    }
+  if (best) {
+    return { ...best.layout, droppedRows: best.dropped };
   }
 
-  // 阶段三：行都丢光了仍放不下（例如大骨本身太多），按数值丢弃大骨。
-  const keptBones = keepTopBones(bones, input);
-  const attempt = attemptLayout(keptBones, MIN_FONT_SIZE, input);
-  if (attempt) {
-    return { ...attempt, droppedRows: totalRows };
-  }
-
-  // 画布实在太小，退化成只画主干和鱼头。
-  return emptyLayout(input, totalRows);
+  // 画布小到连主干都放不下。
+  return { ...buildSkeleton(input), bones: [], droppedRows: totalRows };
 }

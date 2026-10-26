@@ -34,12 +34,14 @@ const config: ControlPanelConfig = {
             name: 'groupby',
             config: {
               ...sharedControls.groupby,
-              label: t('Hierarchy'),
-              description: t(
-                'Dimensions that form the bones, in order. The first column ' +
-                  'becomes the main bones (cause categories), the second the ' +
-                  'sub-bones, and any further columns branch off those.',
-              ),
+              label: () => t('Hierarchy'),
+              description: () =>
+                t(
+                  'Dimensions that form the fishbone, in order. The first ' +
+                    'column is matched to the four fixed main bones ' +
+                    '(人 / 物 / 法 / 环); the remaining columns provide the ' +
+                    'causes, and only the deepest level is drawn.',
+                ),
               validators: [validateNonEmpty],
             },
           },
@@ -49,11 +51,12 @@ const config: ControlPanelConfig = {
             name: 'metric',
             config: {
               ...sharedControls.metric,
-              label: t('Metric'),
-              description: t(
-                'Weighs the causes: it orders the bones, prints the value ' +
-                  'next to each cause and scales how thick a main bone is.',
-              ),
+              label: () => t('Metric'),
+              description: () =>
+                t(
+                  'Weighs the causes: it orders the causes inside each bone ' +
+                    'and prints their values.',
+                ),
             },
           },
         ],
@@ -70,13 +73,15 @@ const config: ControlPanelConfig = {
             name: 'effect_name',
             config: {
               type: 'TextControl',
-              label: t('Effect'),
+              label: () => t('Effect'),
               default: '',
               renderTrigger: true,
-              description: t(
-                'The problem being analysed, written at the fish head, ' +
-                  'e.g. "Late delivery".',
-              ),
+              description: () =>
+                t(
+                  'The problem being analysed, shown in the bubble above ' +
+                    'the fish head. When the dataset has an EffectTitle ' +
+                    'column, that value takes precedence.',
+                ),
             },
           },
         ],
@@ -85,14 +90,15 @@ const config: ControlPanelConfig = {
             name: 'head_position',
             config: {
               type: 'SelectControl',
-              label: t('Head Position'),
+              label: () => t('Head Position'),
               default: 'right',
               choices: [
                 ['right', t('Right')],
                 ['left', t('Left')],
               ],
               renderTrigger: true,
-              description: t('Which end of the spine the fish head sits on.'),
+              description: () =>
+                t('Which end of the spine the fish head sits on.'),
             },
           },
         ],
@@ -101,10 +107,11 @@ const config: ControlPanelConfig = {
             name: 'show_values',
             config: {
               type: 'CheckboxControl',
-              label: t('Show Values'),
+              label: () => t('Show Values'),
               default: true,
               renderTrigger: true,
-              description: t('Print the metric value next to each cause.'),
+              description: () =>
+                t('Print the metric value next to each cause.'),
             },
           },
         ],
@@ -113,7 +120,7 @@ const config: ControlPanelConfig = {
             name: 'font_size',
             config: {
               type: 'SelectControl',
-              label: t('Label Size'),
+              label: () => t('Label Size'),
               default: 'm',
               choices: [
                 ['s', t('Small')],
@@ -121,10 +128,11 @@ const config: ControlPanelConfig = {
                 ['l', t('Large')],
               ],
               renderTrigger: true,
-              description: t(
-                'Base size of the cause labels. The chart shrinks it ' +
-                  'automatically when space runs out.',
-              ),
+              description: () =>
+                t(
+                  'Base size of the cause labels. The chart shrinks it ' +
+                    'automatically when space runs out.',
+                ),
             },
           },
         ],
@@ -133,7 +141,7 @@ const config: ControlPanelConfig = {
             name: 'bone_thickness',
             config: {
               type: 'SelectControl',
-              label: t('Bone Thickness'),
+              label: () => t('Bone Thickness'),
               default: 'medium',
               choices: [
                 ['thin', t('Thin')],
@@ -141,14 +149,14 @@ const config: ControlPanelConfig = {
                 ['thick', t('Thick')],
               ],
               renderTrigger: true,
-              description: t(
-                'Thickness of the largest main bone. Smaller bones scale ' +
-                  'down from this by their metric value.',
-              ),
+              description: () =>
+                t(
+                  'Thickness of the four main bones. All four share the same ' +
+                    'width; the metric only orders the causes and prints values.',
+                ),
             },
           },
         ],
-        ['color_scheme'],
         ['y_axis_format'],
       ],
     },
